@@ -5,7 +5,7 @@ import re
 
 BLEND_IDS = ("orange_apple", "apple_pineapple", "tropical")
 INGREDIENTS = ("orange", "apple", "pineapple")
-DECIMAL_TEXT = re.compile(r"^[+-]?\d+(?:\.\d+)?$")
+DECIMAL_TEXT = re.compile(r"^[+-]?[0-9]+(?:\.[0-9]+)?$")
 
 
 class InputError(Exception):
@@ -29,15 +29,16 @@ def parse_decimal(value: object, path: str, minimum: str, maximum: str, places: 
     if not Decimal(minimum) <= parsed <= Decimal(maximum):
         errors.append({"path": path, "message": f"Enter a value from {minimum} to {maximum}."})
         return None
-    return parsed
+    return Decimal(0) if parsed.is_zero() else parsed
 
 
 def exact_keys(value: object, expected: set[str], path: str,
-               errors: list[dict[str, str]]) -> dict | None:
+               errors: list[dict[str, str]], optional: set[str] | None = None) -> dict | None:
     if not isinstance(value, dict):
         errors.append({"path": path, "message": "Enter the required object."})
         return None
-    for key in sorted(expected - value.keys()):
+    optional = optional or set()
+    for key in sorted((expected - optional) - value.keys()):
         errors.append({"path": f"{path}.{key}", "message": "This field is required."})
     for key in sorted(value.keys() - expected):
         errors.append({"path": f"{path}.{key}", "message": "This field is not supported."})
@@ -64,26 +65,31 @@ def validate_inputs(data: object) -> dict:
         path = f"blends[{index}]"
         blend = exact_keys(raw, {"id", "recipe_percent", "profit_aud_per_litre",
                                  "processing_minutes_per_litre", "min_litres", "max_litres"},
-                           path, errors)
+                           path, errors, optional={"min_litres"})
         if blend is None:
             continue
         blend_id = blend.get("id")
-        if not isinstance(blend_id, str) or blend_id not in BLEND_IDS or blend_id in parsed_blends:
+        supported_id = isinstance(blend_id, str) and blend_id in BLEND_IDS
+        duplicate_id = supported_id and blend_id in parsed_blends
+        if not supported_id or duplicate_id:
             errors.append({"path": f"{path}.id", "message": "Use each supported blend ID once."})
-            continue
         recipe = exact_keys(blend.get("recipe_percent"), set(INGREDIENTS),
                             f"{path}.recipe_percent", errors)
-        shares = {}
+        recipe_basis_points = {}
         if recipe is not None:
             for ingredient in INGREDIENTS:
-                shares[ingredient] = parse_decimal(recipe.get(ingredient),
+                share = parse_decimal(recipe.get(ingredient),
                     f"{path}.recipe_percent.{ingredient}", "0", "100", 2, errors)
-            if all(value is not None for value in shares.values()):
-                if sum(shares.values()) != Decimal("100"):
+                recipe_basis_points[ingredient] = (
+                    int(share * 100) if share is not None else None
+                )
+            if all(value is not None for value in recipe_basis_points.values()):
+                if sum(recipe_basis_points.values()) != 10000:
                     errors.append({"path": f"{path}.recipe_percent",
                                    "message": "Recipe shares must total exactly 100%."})
-                excluded = {"orange_apple": "pineapple", "apple_pineapple": "orange"}.get(blend_id)
-                if excluded and shares[excluded] != 0:
+                excluded = ({"orange_apple": "pineapple", "apple_pineapple": "orange"}.get(blend_id)
+                            if supported_id else None)
+                if excluded and recipe_basis_points[excluded] != 0:
                     errors.append({"path": f"{path}.recipe_percent.{excluded}",
                                    "message": "This ingredient is excluded from the blend."})
         profit = parse_decimal(blend.get("profit_aud_per_litre"),
@@ -97,8 +103,10 @@ def validate_inputs(data: object) -> dict:
         if minimum is not None and maximum is not None and minimum > maximum:
             errors.append({"path": f"{path}.min_litres",
                            "message": "Minimum cannot exceed maximum demand."})
-        parsed_blends[blend_id] = {"recipe": shares, "profit": profit,
-                                   "minutes": minutes, "minimum": minimum, "maximum": maximum}
+        if supported_id and not duplicate_id:
+            parsed_blends[blend_id] = {"recipe_basis_points": recipe_basis_points,
+                                       "profit": profit,
+                                       "minutes": minutes, "minimum": minimum, "maximum": maximum}
     if set(parsed_blends) != set(BLEND_IDS):
         errors.append({"path": "blends", "message": "All three distinct blends are required."})
     raw_available = exact_keys(root.get("available_ingredient_litres"),

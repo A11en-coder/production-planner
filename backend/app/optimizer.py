@@ -23,7 +23,8 @@ def optimize(model: dict) -> dict:
     blends = [model["blends"][blend_id] for blend_id in BLEND_IDS]
     resources = list(INGREDIENTS) + ["processing"]
     limits = [model["available"][name] for name in INGREDIENTS] + [model["minutes"]]
-    coefficients = [[blend["recipe"][name] / Decimal(100) for blend in blends]
+    coefficients = [[Decimal(blend["recipe_basis_points"][name]) / Decimal(10000)
+                     for blend in blends]
                     for name in INGREDIENTS]
     coefficients.append([blend["minutes"] for blend in blends])
     minimum_use = [sum(row[i] * blends[i]["minimum"] for i in range(3))
