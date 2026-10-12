@@ -6,11 +6,11 @@ Last updated: 12 October 2026 (Australia/Sydney)
 
 - Product scope: [PRD v1.0](docs/Production_Planner_PRD.md), 11 October 2026, FR01–FR14 and NFR01–NFR09. The PRD prints “First draft for review”; [TRD v1.0](docs/Production_Planner_TRD.md#3-source-and-scope) records Allen's explicit approval of that scope.
 - Technical design: [TRD v1.0](docs/Production_Planner_TRD.md), 11 October 2026, approved. Its architecture and release gates are specifications, not completed implementation evidence.
-- Overall state: **Capabilities 1.1, 1.2, 2.1, 2.2, and 2.3 implemented, verified, approved, and committed**. Capability 2.4 is queued.
-- Current phase: **Phase 2 — trusted optimization API**. Last completed capability: **2.3 LP construction and solver acceptance**. Next capability: **2.4 complete API contract and safe failures**, queued for approval.
+- Overall state: **Capabilities 1.1, 1.2, and 2.1–2.4 implemented, verified, approved, and committed**. Phase 2 is complete; Capability 3.1 is queued.
+- Current phase: **Phase 3 — public planner interface**. Last completed capability: **2.4 complete API contract and safe failures**. Next capability: **3.1 sample dashboard and editable inputs**, queued for approval.
 - Calendar start date: **not assigned**. The TRD's weeks are relative; do not infer a calendar deadline.
 - Budget: **180 planned hours**, 12 relative weeks × 15 hours. Capability 1.1 used approximately **1.1 wall-clock hours**, including its intentional 30-minute idle measurement; hands-on time was not separately clocked.
-- Last approved capability: **2.3 LP construction and solver acceptance**, explicitly approved 12 October 2026. Capability checkpoint: `7a6d9a5`.
+- Last approved capability: **2.4 complete API contract and safe failures**, explicitly approved 12 October 2026. Capability checkpoint: `b175cc6`.
 
 ## Working rules for this tracker
 
@@ -32,7 +32,7 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 - [x] **2.1 Input schema and validation.** Backend validates fixed blend IDs and exact object keys, ASCII decimal-string syntax and each field's precision/range, exact 10,000-basis-point recipes, excluded ingredients, minimum/maximum consistency, and the 16 KiB streamed request limit. Errors aggregate without echoing submitted values. Corrected the TRD-defined omitted-minimum default to zero and continued collecting fields on invalid-ID rows. Public request/response unchanged. Dependency: 1.2. Evidence: 46 backend tests pass, including exact-size and one-byte-over streaming cases. **T02; validation portion of T04; FR03, NFR03, NFR05.** Commit: `4eb1fa2`.
 - [x] **2.2 Exact minimum-order shortage check.** The optimizer computes required orange, apple, pineapple, and processing use from entered Decimal values before solver conversion; reports every positive shortfall with units and no plan. Dependency: 2.1. Evidence: 48 backend tests pass, including all four shortages, a `1e-7` positive shortfall (solver not called), and equality at capacity (feasible). **FR12.** Checkpoint `63b2fbe`.
 - [x] **2.3 LP construction and solver acceptance.** Existing optimizer builds the three-variable bounded model; calls SciPy `linprog(method="highs")` with the one-second limit; accepts only optimal status with finite values and independent order/resource checks at the TRD tolerance; recomputes profit and usage from unrounded quantities. Dependency: 2.1–2.2. Evidence: 65 backend tests pass, including the independent baseline certificate, edited orange sample (existing test), zero-demand/capacity and zero-processing cases, negative-profit cases, nonoptimal statuses, nonfinite quantities, and order/resource residuals inside and outside `1e-6`. **T03/T05; FR04, NFR03.** Test checkpoint `7a6d9a5`.
-- [ ] **2.4 Complete API contract and safe failures.** Implement `/api/v1/optimize`, `/health`, typed optimal/infeasible/error envelopes, version checks, CORS, request IDs, and redacted metadata logs. Dependency: 2.1–2.3. Evidence: T04/T05 and API portions of T13/T16; **G02** API checks. **FR13, NFR04–NFR05, NFR08.**
+- [x] **2.4 Complete API contract and safe failures.** Verified the existing `/api/v1/optimize` and `/health` routes, typed optimal/infeasible/error envelopes, version checks, CORS, request IDs, no-store headers, and redacted metadata logs. Dependency: 2.1–2.3. Evidence: 77 backend tests pass, including API response, transport, version, forced-failure, and log-redaction checks. **T04/T05 and API portions of T13/T16; FR13, NFR04–NFR05, NFR08.** Existing API implementation required no changes. Test checkpoint `b175cc6`.
 
 ### Phase 3 — public planner interface (weeks 4–6; 45 hours)
 
@@ -101,6 +101,14 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 
 **Completion evidence:** Added [optimizer contract tests](backend/tests/test_optimizer.py). The complete backend suite passed: 65 tests, including independently recomputed baseline profit/resource usage, zero demand/capacity, zero processing coefficients, negative-contribution cases, HiGHS/time-limit configuration, nonoptimal statuses, NaN/Infinity, and bound/resource residuals inside and outside tolerance. Existing Starlette/AnyIO deprecation warning remains. `git diff --check` passed. Owner approved on 12 October 2026; test checkpoint `7a6d9a5`.
 
+## Completed capability record: 2.4 complete API contract and safe failures
+
+**Purpose and outcome:** Establish the complete backend request/response contract and safe failure behavior. The existing [FastAPI application](backend/app/main.py) already provides `/health`, `/api/v1/optimize`, fixed version metadata, exact CORS configuration, bounded request reading, request IDs, non-cacheable responses, typed optimal/infeasible/error envelopes, and metadata-only calculation logs; verification found no production-code defect.
+
+**Representative path:** The optimize route checks content type/encoding and declared plus streamed byte counts before parsing JSON. It handles model-version conflicts separately from schema errors, validates before solver use, maps timeout/calculation/unexpected exceptions to safe response codes, and returns either a plan or all exact shortages. Each application response carries a server-generated UUID; logs record only request/outcome/error category/process marker/timing.
+
+**Completion evidence:** Added [API contract tests](backend/tests/test_api_contract.py). The complete backend suite passed: 77 tests, covering health and version identity, optimal/infeasible shapes, model/API version errors before solving, malformed JSON, unsupported media/encoding, body size limits, forced timeout/calculation/internal errors, request IDs, `Cache-Control: no-store`, input/log redaction, and existing exact CORS behavior. Existing Starlette/AnyIO deprecation warning remains. `git diff --check` passed. Owner approved on 12 October 2026; test checkpoint `b175cc6`.
+
 ## Decisions, dependencies, and open risks
 
 | Item | Current record |
@@ -123,5 +131,6 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 | 12 Oct 2026 | Capability 2.1 / input schema and validation | Owner approved; 46 backend tests pass; exact recipe basis points, field rules, optional minimum, aggregated errors, and streamed-body boundary verified. | Not separately tracked | `4eb1fa2` |
 | 12 Oct 2026 | Capability 2.2 / exact minimum-order shortage check | Owner approved; 48 backend tests pass; all four resources, tiny positive shortfall, solver bypass, and capacity equality verified. | Not separately tracked | `63b2fbe` |
 | 12 Oct 2026 | Capability 2.3 / LP construction and solver acceptance | Owner approved; 65 backend tests pass; independent objective/resource certificate, edge cases, status/finite checks, and order/resource tolerance boundaries verified. Existing optimizer required no production changes. | Not separately tracked | `7a6d9a5` |
+| 12 Oct 2026 | Capability 2.4 / complete API contract and safe failures | Owner approved; 77 backend tests pass; optimal/infeasible/error envelopes, versions, transport limits, request IDs, cache headers, CORS, and metadata-only logs verified. Existing API required no production changes. | Not separately tracked | `b175cc6` |
 
 When closing a capability, add its check results, relevant PRD/TRD IDs, approval/decision, actual hours, and Git commit here; then advance the current phase/capability above. Keep failures and unresolved risks visible rather than checking a gate based on intent.
