@@ -8,6 +8,7 @@ __pycache__/
 node_modules/
 .next/
 .tools/
+.codex/
 *.tsbuildinfo
 frontend/test-results/
 frontend/playwright-report/

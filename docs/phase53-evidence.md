@@ -1,6 +1,6 @@
 # Capability 5.3 — public safeguards, speed, and first-time use
 
-Status: **in progress; preview-only verification**. No production application deployment or promotion was performed. Record prepared 12 October 2026 (Australia/Sydney); T14 and T15 are complete. Final walkthrough and owner completion approval remain open.
+Status: **approved and committed**. No production application deployment or promotion was performed. Owner approved Capability 5.3 on 13 October 2026 (Australia/Sydney); T14 and T15 are complete. Implementation/evidence checkpoint: `6b53ef8`; progress checkpoint: `2ba385e`.
 
 ## Deployment pair
 
@@ -101,7 +101,6 @@ Idle request IDs were found in the API deployment logs. Each record reports only
 Primary advisory records: [Starlette FileResponse](https://github.com/Kludex/starlette/security/advisories/GHSA-7f5h-v6xp-fcq8), [request URL path](https://github.com/Kludex/starlette/security/advisories/GHSA-86qp-5c8j-p5mr), [Windows StaticFiles](https://github.com/Kludex/starlette/security/advisories/GHSA-wqp7-x3pw-xc5r), [HTTPEndpoint dispatch](https://github.com/Kludex/starlette/security/advisories/GHSA-x746-7m8f-x49c), [form limits](https://github.com/Kludex/starlette/security/advisories/GHSA-82w8-qh3p-5jfq), [request URL hostname](https://github.com/Kludex/starlette/security/advisories/GHSA-jp82-jpqv-5vv3), and [pytest temporary-directory issue](https://github.com/advisories/GHSA-6w46-j5rx-g56g). The package audit did not change versions; this should be handled as a separate dependency upgrade with backend/CI verification and a new preview before release.
 - No production preview promotion was performed. The projects are not linked to a GitHub repository; previews were built from a tracked-source snapshot. Firefox and physical-device/screen-reader checks remain outside this capability's completed evidence per owner-approved 5.2 scope.
 
-## Remaining acceptance evidence
+## Capability completion
 
-1. Walk through this evidence with the owner and obtain completion approval.
-2. After approval, create the separate implementation and `progress.md` checkpoints.
+The owner reviewed the evidence and approved Capability 5.3 complete on 13 October 2026. The separate implementation/evidence and progress commits are recorded in the status above. Phase 6.1 owns public repository publication and hosted GitHub Actions verification; Phase 6.2 owns production deployment and rollback rehearsal.
