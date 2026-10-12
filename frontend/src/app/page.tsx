@@ -77,7 +77,7 @@ function formatComparisonDelta(value: number, unit: ComparisonUnit): string {
 }
 
 function ComparisonTable({ caption, aName, bName, rows }: { caption: string; aName: string; bName: string; rows: ComparisonMetric[] }) {
-  return <div className="table-scroll"><table className="result-table comparison-table">
+  return <div className="table-scroll" tabIndex={0} role="region" aria-label={`${caption} comparison table`}><table className="result-table comparison-table">
     <caption>{caption}</caption>
     <thead><tr><th scope="col">Measure</th><th scope="col">Unit</th><th scope="col">Scenario A · {aName}</th><th scope="col">Scenario B · {bName}</th><th scope="col">B − A</th></tr></thead>
     <tbody>{rows.map((row) => {
@@ -487,7 +487,7 @@ export default function Home() {
 
   return <main className="shell">
     <header className="topbar">
-      <a className="brand" href="#top" aria-label="Production Planner home">
+      <a className="brand" href="#top">
         <span className="brand-mark" aria-hidden="true">P</span>
         <span>Production Planner</span>
       </a>
@@ -708,7 +708,7 @@ export default function Home() {
             <div className="result-summary"><span>Total profit contribution</span><strong>{formatContribution(result.profit_contribution_aud)}</strong></div>
             <section className="result-block" aria-labelledby="production-results-heading">
               <h4 id="production-results-heading">Production plan</h4>
-              <div className="table-scroll"><table className="result-table"><caption>Recommended production and demand-limit status</caption><thead><tr><th scope="col">Blend</th><th scope="col">Production</th><th scope="col">Demand limit</th><th scope="col">Contribution</th></tr></thead><tbody>
+              <div className="table-scroll" tabIndex={0} role="region" aria-label="Recommended production and demand-limit table"><table className="result-table"><caption>Recommended production and demand-limit status</caption><thead><tr><th scope="col">Blend</th><th scope="col">Production</th><th scope="col">Demand limit</th><th scope="col">Contribution</th></tr></thead><tbody>
                 {BLEND_IDS.map((blendId) => <tr key={blendId}>
                   <th scope="row">{BLEND_LABELS[blendId]}</th>
                   <td><span>{formatQuantity(result.production_litres[blendId], "L")}</span>{result.production_litres[blendId] > 0 && result.production_litres[blendId] < 0.001 && <small className="precision-detail">Exact: {formatPrecision(result.production_litres[blendId])} L</small>}</td>
@@ -727,7 +727,7 @@ export default function Home() {
             </section>
             {resultBlendContributions && <section className="result-block" aria-labelledby="contribution-results-heading">
               <h4 id="contribution-results-heading">Contribution by blend</h4>
-              <div className="table-scroll"><table className="result-table"><caption>Contribution is input rate × returned quantity; rounded rows may not sum exactly to the total.</caption><thead><tr><th scope="col">Blend</th><th scope="col">Contribution</th><th scope="col">Production</th></tr></thead><tbody>
+              <div className="table-scroll" tabIndex={0} role="region" aria-label="Contribution by blend table"><table className="result-table"><caption>Contribution is input rate × returned quantity; rounded rows may not sum exactly to the total.</caption><thead><tr><th scope="col">Blend</th><th scope="col">Contribution</th><th scope="col">Production</th></tr></thead><tbody>
                 {BLEND_IDS.map((blendId) => <tr key={blendId}><th scope="row">{BLEND_LABELS[blendId]}</th><td className={resultBlendContributions[blendId] < 0 ? "negative-value" : ""}>{formatContribution(resultBlendContributions[blendId])}</td><td>{formatQuantity(result.production_litres[blendId], "L")}</td></tr>)}
               </tbody></table></div>
               <div className="chart-card" role="img" aria-label={`Contribution by blend: ${BLEND_IDS.map((id) => `${BLEND_LABELS[id]} ${formatContribution(resultBlendContributions[id])}`).join("; ")}`}>
@@ -741,7 +741,7 @@ export default function Home() {
             </section>}
             <section className="result-block" aria-labelledby="resource-results-heading">
               <h4 id="resource-results-heading">Resource use</h4>
-              <div className="table-scroll"><table className="result-table"><caption>Resource use, remaining capacity, and constraint status</caption><thead><tr><th scope="col">Resource</th><th scope="col">Used</th><th scope="col">Available</th><th scope="col">Remaining</th><th scope="col">Utilization</th><th scope="col">Status</th></tr></thead><tbody>
+              <div className="table-scroll" tabIndex={0} role="region" aria-label="Resource use and constraint status table"><table className="result-table"><caption>Resource use, remaining capacity, and constraint status</caption><thead><tr><th scope="col">Resource</th><th scope="col">Used</th><th scope="col">Available</th><th scope="col">Remaining</th><th scope="col">Utilization</th><th scope="col">Status</th></tr></thead><tbody>
                 {result.resources.map((resource) => {
                   const unit = resource.unit === "minutes" ? "min" : "L";
                   const residual = result.numerical_residuals.find((item) => item.constraint === resource.id);
@@ -762,7 +762,7 @@ export default function Home() {
               </div>
               <p className="result-footnote">“Fully used” and “At demand cap” identify active limits; more capacity does not guarantee higher contribution.</p>
               {result.numerical_residuals.length > 0 && <div className="residual-note"><strong>Solver tolerance applied.</strong> Small positive residuals within the accepted 0.000001 tolerance are disclosed here, not treated as exact equality.<ul>{result.numerical_residuals.map((item, index) => <li key={`${item.constraint}-${index}`}>{item.constraint}: {item.residual < 0.001 ? `<0.001 ${item.unit === "litres" ? "L" : "min"}` : formatQuantity(item.residual, item.unit === "litres" ? "L" : "min")} <small>(exact {formatPrecision(item.residual)} {item.unit})</small></li>)}</ul></div>}
-              <details className="precision-details"><summary>Unrounded calculation values</summary><div className="table-scroll"><table className="result-table"><caption>Full numeric values from the optimizer response and submitted input snapshot</caption><thead><tr><th scope="col">Measure</th><th scope="col">Unrounded value</th></tr></thead><tbody>
+              <details className="precision-details"><summary>Unrounded calculation values</summary><div className="table-scroll" tabIndex={0} role="region" aria-label="Unrounded calculation values table"><table className="result-table"><caption>Full numeric values from the optimizer response and submitted input snapshot</caption><thead><tr><th scope="col">Measure</th><th scope="col">Unrounded value</th></tr></thead><tbody>
                 <tr><th scope="row">Total contribution</th><td>{formatPrecision(result.profit_contribution_aud)} AUD</td></tr>
                 {BLEND_IDS.map((blendId) => <Fragment key={blendId}><tr><th scope="row">{BLEND_LABELS[blendId]} production</th><td>{formatPrecision(result.production_litres[blendId])} L</td></tr>{resultBlendContributions && <tr><th scope="row">{BLEND_LABELS[blendId]} contribution</th><td>{formatPrecision(resultBlendContributions[blendId])} AUD</td></tr>}</Fragment>)}
                 {result.resources.map((resource) => <Fragment key={resource.id}><tr><th scope="row">{resource.id} used</th><td>{formatPrecision(resource.used)} {resource.unit}</td></tr><tr><th scope="row">{resource.id} available</th><td>{formatPrecision(resource.available)} {resource.unit}</td></tr><tr><th scope="row">{resource.id} remaining</th><td>{formatPrecision(resource.remaining)} {resource.unit}</td></tr>{resource.utilization_percent !== null && <tr><th scope="row">{resource.id} utilization</th><td>{formatPrecision(resource.utilization_percent)}%</td></tr>}</Fragment>)}
@@ -771,7 +771,7 @@ export default function Home() {
             </section>
           </> : <>
             <p className="shortage-intro">The minimum orders require more resources than are available. No production plan was returned.</p>
-            <div className="table-scroll"><table className="result-table"><caption>Exact resource shortages for the submitted minimum orders</caption><thead><tr><th scope="col">Resource</th><th scope="col">Required</th><th scope="col">Available</th><th scope="col">Shortfall</th></tr></thead><tbody>{result.shortages.map((shortage) => {
+            <div className="table-scroll" tabIndex={0} role="region" aria-label="Exact resource shortages table"><table className="result-table"><caption>Exact resource shortages for the submitted minimum orders</caption><thead><tr><th scope="col">Resource</th><th scope="col">Required</th><th scope="col">Available</th><th scope="col">Shortfall</th></tr></thead><tbody>{result.shortages.map((shortage) => {
               const unit = shortage.unit === "minutes" ? "min" : "L";
               const tiny = shortage.shortfall < 0.001;
               return <tr key={shortage.resource_id}><th scope="row">{shortage.resource_id === "processing" ? "Processing time" : `${INGREDIENT_LABELS[shortage.resource_id]} juice`}</th><td>{formatQuantity(shortage.required, unit)}</td><td>{formatQuantity(shortage.available, unit)}</td><td className="negative-value">{tiny ? <><span>&lt;0.001 {unit}</span><small className="precision-detail">Exact: {formatPrecision(shortage.shortfall)} {unit}</small></> : formatQuantity(shortage.shortfall, unit)}</td></tr>;

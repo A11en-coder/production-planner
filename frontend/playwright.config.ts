@@ -12,7 +12,10 @@ export default defineConfig({
     baseURL: "http://localhost:3000",
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    { name: "webkit", use: { ...devices["Desktop Safari"] } },
+  ],
   webServer: [
     {
       command: "node ./node_modules/next/dist/bin/next start --hostname localhost --port 3000",
@@ -22,7 +25,9 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      command: "python -m uvicorn app.main:app --host 0.0.0.0 --port 8000",
+      command: process.platform === "win32"
+        ? `"${path.resolve(frontendRoot, "..", "backend", ".venv", "Scripts", "python.exe")}" -m uvicorn app.main:app --host 0.0.0.0 --port 8000`
+        : "python -m uvicorn app.main:app --host 0.0.0.0 --port 8000",
       url: "http://localhost:8000/health",
       cwd: path.resolve(frontendRoot, "..", "backend"),
       env: { ALLOWED_ORIGINS: '["http://localhost:3000"]' },
