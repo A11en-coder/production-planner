@@ -6,11 +6,11 @@ Last updated: 12 October 2026 (Australia/Sydney)
 
 - Product scope: [PRD v1.0](docs/Production_Planner_PRD.md), 11 October 2026, FR01–FR14 and NFR01–NFR09. The PRD prints “First draft for review”; [TRD v1.0](docs/Production_Planner_TRD.md#3-source-and-scope) records Allen's explicit approval of that scope.
 - Technical design: [TRD v1.0](docs/Production_Planner_TRD.md), 11 October 2026, approved. Its architecture and release gates are specifications, not completed implementation evidence.
-- Overall state: **Capabilities 1.1, 1.2, and 2.1–2.4 implemented, verified, approved, and committed**. Phase 2 is complete; Capability 3.1 is queued.
-- Current phase: **Phase 3 — public planner interface**. Last completed capability: **2.4 complete API contract and safe failures**. Next capability: **3.1 sample dashboard and editable inputs**, queued for approval.
+- Overall state: **Capabilities 1.1, 1.2, 2.1–2.4, and 3.1 implemented, verified, approved, and committed**. Capability 3.2 is queued.
+- Current phase: **Phase 3 — public planner interface**. Last completed capability: **3.1 sample dashboard and editable inputs**. Next capability: **3.2 calculation controller and freshness**, queued for approval.
 - Calendar start date: **not assigned**. The TRD's weeks are relative; do not infer a calendar deadline.
 - Budget: **180 planned hours**, 12 relative weeks × 15 hours. Capability 1.1 used approximately **1.1 wall-clock hours**, including its intentional 30-minute idle measurement; hands-on time was not separately clocked.
-- Last approved capability: **2.4 complete API contract and safe failures**, explicitly approved 12 October 2026. Capability checkpoint: `b175cc6`.
+- Last approved capability: **3.1 sample dashboard and editable inputs**, explicitly approved 12 October 2026. Capability checkpoint: `df26153`.
 
 ## Working rules for this tracker
 
@@ -36,7 +36,7 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 
 ### Phase 3 — public planner interface (weeks 4–6; 45 hours)
 
-- [ ] **3.1 Sample dashboard and editable inputs.** Create the single dark dashboard with fictional fixture, intro/assumptions, responsive form, labels/units, frontend validation, and fixed three-blend model. No automatic save. Dependency: stable contract fixture/API. Evidence: T01/T02/T07. **FR01–FR03, FR06, FR14.**
+- [x] **3.1 Sample dashboard and editable inputs.** Replaced the single-field harness with the dark dashboard, fictional preloaded fixture, model guide, responsive form, labels/units, client validation, and fixed three-blend inputs. No automatic save or calculation request wiring. Dependency: stable contract/API. Evidence: frontend typecheck/build, direct validator runtime cases, and local page HTTP/accessibility-tree inspection passed. **T01/T02/T07; FR01–FR03, FR06, FR14.** Owner approved 12 October 2026. Checkpoint `df26153`.
 - [ ] **3.2 Calculation controller and freshness.** Post canonical inputs to the real API, validate response versions/shapes, track input revision and active request ID, discard obsolete responses, handle the ten-second browser deadline, preserve inputs, and provide manual Retry. Dependency: 3.1 and 2.4. Evidence: T06/T13. **FR09, FR13, NFR04.**
 - [ ] **3.3 Results and explanation.** Show unrounded-backed quantities, contribution, resource used/remaining, binding/demand flags, tables plus matching simple charts; handle zero, negative, infeasible, and small residual displays without mislabelling a result. Dependency: 3.2. Evidence: T03/T05/T07 and chart accessibility portion of T12. **FR05–FR06, FR12.**
 
@@ -109,6 +109,14 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 
 **Completion evidence:** Added [API contract tests](backend/tests/test_api_contract.py). The complete backend suite passed: 77 tests, covering health and version identity, optimal/infeasible shapes, model/API version errors before solving, malformed JSON, unsupported media/encoding, body size limits, forced timeout/calculation/internal errors, request IDs, `Cache-Control: no-store`, input/log redaction, and existing exact CORS behavior. Existing Starlette/AnyIO deprecation warning remains. `git diff --check` passed. Owner approved on 12 October 2026; test checkpoint `b175cc6`.
 
+## Completed capability record: 3.1 sample dashboard and editable inputs
+
+**Purpose and outcome:** Replace the one-field feasibility page with an immediately usable, responsive production-planning form that exposes the approved three-blend model. The new [planner page](frontend/src/app/page.tsx) preloads the fictional sample, supports edits to recipes, contribution, processing rates, minimum/maximum quantities and shared capacities, and explains the model assumptions. [Shared types/sample values](frontend/src/lib/planner.ts) and [frontend validation](frontend/src/lib/validation.ts) are separated from the presentation. The root [metadata](frontend/src/app/layout.tsx) now names the planner rather than the feasibility harness.
+
+**Representative path:** The form owns editable string values and updates them immutably. `validateInputs()` checks signed decimal syntax, per-field precision and ranges, exact recipe totals in integer basis points, excluded recipe ingredients, and minimum ≤ maximum. Submission displays accessible field feedback; successful validation honestly indicates the calculation service will be wired in Capability 3.2. No scenario is saved automatically.
+
+**Completion evidence:** `npm run typecheck` and `npm run build` passed. Direct runtime checks passed for the sample, excess precision, wrong recipe total, excluded ingredient, min/max ordering, and invalid exponent syntax. The local page returned HTTP 200; its browser accessibility tree exposed the loaded sample, all 25 editable numeric fields with labels/units, status copy, and dashboard title. `git diff --check` passed. The repository had no frontend test runner, so no new framework/dependencies were added. Owner approved on 12 October 2026; implementation checkpoint `df26153`.
+
 ## Decisions, dependencies, and open risks
 
 | Item | Current record |
@@ -132,5 +140,6 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 | 12 Oct 2026 | Capability 2.2 / exact minimum-order shortage check | Owner approved; 48 backend tests pass; all four resources, tiny positive shortfall, solver bypass, and capacity equality verified. | Not separately tracked | `63b2fbe` |
 | 12 Oct 2026 | Capability 2.3 / LP construction and solver acceptance | Owner approved; 65 backend tests pass; independent objective/resource certificate, edge cases, status/finite checks, and order/resource tolerance boundaries verified. Existing optimizer required no production changes. | Not separately tracked | `7a6d9a5` |
 | 12 Oct 2026 | Capability 2.4 / complete API contract and safe failures | Owner approved; 77 backend tests pass; optimal/infeasible/error envelopes, versions, transport limits, request IDs, cache headers, CORS, and metadata-only logs verified. Existing API required no production changes. | Not separately tracked | `b175cc6` |
+| 12 Oct 2026 | Capability 3.1 / sample dashboard and editable inputs | Owner approved; frontend typecheck/build pass; validator runtime checks and local HTTP/accessibility-tree inspection pass; full sample form and model guide are present. | Not separately tracked | `df26153` |
 
 When closing a capability, add its check results, relevant PRD/TRD IDs, approval/decision, actual hours, and Git commit here; then advance the current phase/capability above. Keep failures and unresolved risks visible rather than checking a gate based on intent.
