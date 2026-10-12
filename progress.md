@@ -6,11 +6,11 @@ Last updated: 12 October 2026 (Australia/Sydney)
 
 - Product scope: [PRD v1.0](docs/Production_Planner_PRD.md), 11 October 2026, FR01–FR14 and NFR01–NFR09. The PRD prints “First draft for review”; [TRD v1.0](docs/Production_Planner_TRD.md#3-source-and-scope) records Allen's explicit approval of that scope.
 - Technical design: [TRD v1.0](docs/Production_Planner_TRD.md), 11 October 2026, approved. Its architecture and release gates are specifications, not completed implementation evidence.
-- Overall state: **planning complete; Capabilities 1.1 and 1.2 implemented, verified, approved, and committed**. Capability 2.1 is queued.
-- Current phase: **Phase 1 — feasibility and foundations**. Last completed capability: **1.2 repository/API foundations**. Next capability: **2.1 input schema and validation**, queued.
+- Overall state: **Capabilities 1.1, 1.2, and 2.1 implemented, verified, approved, and committed**. Capability 2.2 is queued.
+- Current phase: **Phase 2 — trusted optimization API**. Last completed capability: **2.1 input schema and validation**. Next capability: **2.2 exact minimum-order shortage check**, queued.
 - Calendar start date: **not assigned**. The TRD's weeks are relative; do not infer a calendar deadline.
 - Budget: **180 planned hours**, 12 relative weeks × 15 hours. Capability 1.1 used approximately **1.1 wall-clock hours**, including its intentional 30-minute idle measurement; hands-on time was not separately clocked.
-- Last approved capability: **1.2 repository/API foundations**, explicitly approved 12 October 2026. Capability checkpoint: `f3640bb`.
+- Last approved capability: **2.1 input schema and validation**, explicitly approved 12 October 2026. Capability checkpoint: `4eb1fa2`.
 
 ## Working rules for this tracker
 
@@ -29,7 +29,7 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 
 ### Phase 2 — trusted optimization API (weeks 2–3; 30 hours)
 
-- [ ] **2.1 Input schema and validation.** Implement exact fixed IDs, decimal-string syntax/precision/ranges, recipe basis-point totals, excluded ingredients, min/max consistency, and 16 KiB streamed-body/media checks. Return all usable field errors without echoing values. Dependency: 1.2. Evidence: T02 and validation portions of T04. **FR03, NFR03, NFR05.**
+- [x] **2.1 Input schema and validation.** Backend validates fixed blend IDs and exact object keys, ASCII decimal-string syntax and each field's precision/range, exact 10,000-basis-point recipes, excluded ingredients, minimum/maximum consistency, and the 16 KiB streamed request limit. Errors aggregate without echoing submitted values. Corrected the TRD-defined omitted-minimum default to zero and continued collecting fields on invalid-ID rows. Public request/response unchanged. Dependency: 1.2. Evidence: 46 backend tests pass, including exact-size and one-byte-over streaming cases. **T02; validation portion of T04; FR03, NFR03, NFR05.** Commit: `4eb1fa2`.
 - [ ] **2.2 Exact minimum-order shortage check.** Compute required orange, apple, pineapple, and processing use from entered Decimal values before solver conversion; report every positive shortfall with units and no plan. Dependency: 2.1. Evidence: T03/T04, including all four shortages and tiny positive shortages. **FR12.**
 - [ ] **2.3 LP construction and solver acceptance.** Build the three-variable bounded model; call SciPy `linprog(method="highs")` with the one-second limit; accept only optimal status with finite values and independent order/resource checks at the TRD tolerance. Recompute profit and usage from unrounded quantities. Dependency: 2.1–2.2. Evidence: T03/T05, including the baseline certificate, edited sample, zero/negative cases, and nonoptimal statuses. **FR04, NFR03.**
 - [ ] **2.4 Complete API contract and safe failures.** Implement `/api/v1/optimize`, `/health`, typed optimal/infeasible/error envelopes, version checks, CORS, request IDs, and redacted metadata logs. Dependency: 2.1–2.3. Evidence: T04/T05 and API portions of T13/T16; **G02** API checks. **FR13, NFR04–NFR05, NFR08.**
@@ -77,6 +77,14 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 
 **Completion evidence:** 9 backend tests passed; `npm run typecheck` and `npm run build` passed; local API and Next.js development servers started from the documented commands, `/health` returned ready, the fixture returned an optimal AUD 219.3333 baseline, and the frontend returned HTTP 200. One existing Starlette/AnyIO deprecation warning remains. Owner explicitly approved the walkthrough and completion on 12 October 2026; checkpoint `f3640bb`.
 
+## Completed capability record: 2.1 input schema and validation
+
+**Purpose and outcome:** Enforce the approved API input rules before optimization while preserving the public request and response format. [Validation](backend/app/validation.py) now canonicalizes negative zero, accepts ASCII-only decimal syntax, implements the documented optional zero minimum, validates recipes as integer basis points, and gathers independent errors even when an ID is invalid. [The optimizer](backend/app/optimizer.py) converts basis points back to exact Decimal ingredient coefficients before solver conversion.
+
+**Representative path:** `main.calculate()` enforces media type and checks both declared and streamed body length, parses JSON, then invokes `validate_inputs()`. On success it calls `optimize()` with validated Decimal bounds and basis-point recipes. A validation failure returns field paths and generic messages without submitted values; the solver is not called.
+
+**Completion evidence:** 46 backend tests passed, covering numeric syntax/types/ranges/precision, recipe totals and exclusions, fixed IDs and exact keys, optional minimum and min/max consistency, error aggregation/redaction, and 16 KiB streamed-body boundary behavior. The established Starlette/AnyIO deprecation warning remains. No meaningful runtime optimization is justified for this three-blend, 4×3 model; the basis-point conversion follows the TRD’s exact recipe representation. Owner approved on 12 October 2026; implementation checkpoint `4eb1fa2`.
+
 ## Decisions, dependencies, and open risks
 
 | Item | Current record |
@@ -96,5 +104,6 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 | 12 Oct 2026 | Planning intake | PRD/TRD read; repository inventory found planning documents only. No application checks or deployment claimed. | Not recorded | None |
 | 12 Oct 2026 | Capability 1.1 / G01 | Passed; owner approved; browser/API evidence in [hosting-spike-evidence.md](docs/hosting-spike-evidence.md). Progress tracking recorded in this commit. | ~1.1 elapsed hours (includes 30-min idle wait) | `a9c44b1` |
 | 12 Oct 2026 | Capability 1.2 / repository/API foundations | Owner approved; README setup and contract documentation; 9 backend tests, frontend typecheck/build, and local API/web startup smoke passed. | Not separately tracked | `f3640bb` |
+| 12 Oct 2026 | Capability 2.1 / input schema and validation | Owner approved; 46 backend tests pass; exact recipe basis points, field rules, optional minimum, aggregated errors, and streamed-body boundary verified. | Not separately tracked | `4eb1fa2` |
 
 When closing a capability, add its check results, relevant PRD/TRD IDs, approval/decision, actual hours, and Git commit here; then advance the current phase/capability above. Keep failures and unresolved risks visible rather than checking a gate based on intent.
