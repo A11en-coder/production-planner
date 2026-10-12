@@ -9,7 +9,7 @@ The dashboard, optimizer API, scenario saving, and comparison flow are implement
 | Planner | [Open the planner](https://production-planner-web-spike-20261012.vercel.app) |
 | Optimizer API | [Check API health](https://production-planner-api-spike-20261012.vercel.app/health) |
 
-The recorded deployment IDs, paired origins, checks, security review, and performance results are in [the Phase 5.3 evidence](docs/phase53-evidence.md). The public GitHub repository and GitHub Actions result are still pending; see [the release-candidate record](docs/release-candidate.md).
+The recorded deployment IDs, paired origins, checks, security review, and performance results are in [the Phase 5.3 evidence](docs/phase53-evidence.md). This public repository's initial [GitHub Actions run](https://github.com/A11en-coder/production-planner/actions/runs/38264084794) passed for commit `bc86ff1`; see [the release-candidate record](docs/release-candidate.md).
 
 ## Try the sample
 
@@ -110,7 +110,7 @@ npm run test:e2e
 
 Playwright starts the locally built frontend and API using [`playwright.config.ts`](frontend/playwright.config.ts). The checked browser engines are Chromium and WebKit; Firefox is deferred. CI uses the same supported engine set. Live Vercel performance tests are manual and paced; ordinary CI does not send repeated traffic to the public service.
 
-The [`checks` GitHub Actions workflow](.github/workflows/checks.yml) runs on pushes and pull requests. It installs pinned frontend dependencies and backend development requirements, then runs backend tests, frontend lint/typecheck/unit tests/build, and browser end-to-end tests. Its first run on GitHub has not yet been observed.
+The [`checks` GitHub Actions workflow](.github/workflows/checks.yml) runs on pushes and pull requests. It installs pinned frontend dependencies and backend development requirements, then runs backend tests, frontend lint/typecheck/unit tests/build, and browser end-to-end tests. The initial GitHub run passed on 13 October 2026: backend tests passed, all 19 frontend unit tests passed, and all 12 Chromium/WebKit browser tests passed. GitHub reported runner/action deprecation notices; see the [release-candidate record](docs/release-candidate.md).
 
 ## Configuration and deployment
 
