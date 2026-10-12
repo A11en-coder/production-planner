@@ -2,14 +2,14 @@
 
 Production Planner is a browser based demonstration for planning daily output across three fictional juice blends. It finds the combination with the highest entered profit contribution while respecting shared ingredient, processing time, minimum order, and demand limits.
 
-The dashboard, optimizer API, scenario saving, and comparison flow are implemented. The deployed URLs below are **Vercel preview deployments**, not a production release:
+The dashboard, optimizer API, scenario saving, and comparison flow are available on both the public Preview pair and the Production pair. Production is live; its deployment and rollback evidence is recorded in the [release record](docs/release-candidate.md).
 
-| Service | Preview |
-| --- | --- |
-| Planner | [Open the planner](https://production-planner-web-spike-20261012.vercel.app) |
-| Optimizer API | [Check API health](https://production-planner-api-spike-20261012.vercel.app/health) |
+| Service | Production | Preview |
+| --- | --- | --- |
+| Planner | [Open Production planner](https://production-planner-web-tan.vercel.app) | [Open Preview planner](https://production-planner-web-spike-20261012.vercel.app) |
+| Optimizer API | [Check Production API health](https://production-planner-api.vercel.app/health) | [Check Preview API health](https://production-planner-api-spike-20261012.vercel.app/health) |
 
-The recorded deployment IDs, paired origins, checks, security review, and performance results are in [the Phase 5.3 evidence](docs/phase53-evidence.md). This public repository's initial [GitHub Actions run](https://github.com/A11en-coder/production-planner/actions/runs/38264084794) passed for commit `bc86ff1`; see [the release-candidate record](docs/release-candidate.md).
+The recorded deployment IDs, paired origins, security review, and performance results are in [the Phase 5.3 evidence](docs/phase53-evidence.md) and [Phase 6.2 evidence](docs/phase62-evidence.md). [GitHub Actions Checks run #3](https://github.com/A11en-coder/production-planner/actions/runs/38269613193) passed for `59a4d5a`, the source snapshot reviewed for this closeout; see [the release record](docs/release-candidate.md) for both environments and accepted limitations.
 
 ## Try the sample
 
@@ -110,7 +110,7 @@ npm run test:e2e
 
 Playwright starts the locally built frontend and API using [`playwright.config.ts`](frontend/playwright.config.ts). The checked browser engines are Chromium and WebKit; Firefox is deferred. CI uses the same supported engine set. Live Vercel performance tests are manual and paced; ordinary CI does not send repeated traffic to the public service.
 
-The [`checks` GitHub Actions workflow](.github/workflows/checks.yml) runs on pushes and pull requests. It installs pinned frontend dependencies and backend development requirements, then runs backend tests, frontend lint/typecheck/unit tests/build, and browser end-to-end tests. The initial GitHub run passed on 13 October 2026: backend tests passed, all 19 frontend unit tests passed, and all 12 Chromium/WebKit browser tests passed. GitHub reported runner/action deprecation notices; see the [release-candidate record](docs/release-candidate.md).
+The [`checks` GitHub Actions workflow](.github/workflows/checks.yml) runs on pushes and pull requests. It installs pinned frontend dependencies and backend development requirements, then runs backend tests, frontend lint/typecheck/unit tests/build, and browser end-to-end tests. GitHub Actions [Checks #3](https://github.com/A11en-coder/production-planner/actions/runs/38269613193) passed on 13 October 2026 for commit `59a4d5a`: backend passed; all 19 frontend unit tests and all 12 Chromium/WebKit browser tests passed. GitHub reported runner/action deprecation notices; see the [release record](docs/release-candidate.md).
 
 ## Configuration and deployment
 
@@ -121,11 +121,11 @@ The frontend and backend are separate Vercel projects. Set these environment var
 | Frontend | `NEXT_PUBLIC_BACKEND_URL` | Public base URL of the matching optimizer API deployment. |
 | Backend | `ALLOWED_ORIGINS` | JSON array of exact allowed frontend origins, for example `["https://planner.example"]`. |
 
-The preview pair uses the frontend alias shown above and the API alias shown above. The preview API's CORS allowlist contains that exact frontend origin. No secret is required by the browser or optimizer API. Keep preview and production values separate; a preview-built frontend must not be promoted as a production build unless its embedded API URL is correct.
+Each pair has environment-specific frontend and API values. The Preview API allows the exact Preview frontend origin; the Production API allows the exact Production frontend origin. No secret is required by the browser or optimizer API. Keep the values separate; a Preview-built frontend must not be promoted as a Production build unless its embedded API URL is correct. The Production endpoint has no custom Vercel rate-limit rule under the current Hobby plan; the owner accepted this limitation for the current release. See [Phase 6.2 evidence](docs/phase62-evidence.md).
 
 The API runs Python 3.12 and the frontend uses Node.js 24. Backend runtime packages are pinned in [`backend/requirements.txt`](backend/requirements.txt); test tools are in [`backend/requirements-dev.txt`](backend/requirements-dev.txt). Frontend versions are pinned in [`frontend/package-lock.json`](frontend/package-lock.json).
 
-The current public pair is a preview. Capability 6.2 covers the separate, manually controlled production release and rollback rehearsal. Review the [release-candidate record](docs/release-candidate.md) and [TRD deployment and rollback instructions](docs/Production_Planner_TRD.md#16-deployment-and-rollout) before a production release.
+Production is live at the aliases above. The API-first deployment, smoke checks, and rollback rehearsal are recorded in the [release record](docs/release-candidate.md), [Phase 6.2 evidence](docs/phase62-evidence.md), and [TRD deployment and rollback instructions](docs/Production_Planner_TRD.md#16-deployment-and-rollout). The deployed source has not changed since its approved application checkpoint; later commits update documentation.
 
 ## Repository map
 
@@ -137,9 +137,12 @@ The current public pair is a preview. Capability 6.2 covers the separate, manual
 | `docs/Production_Planner_PRD.md` | Product requirements and acceptance criteria. |
 | `docs/Production_Planner_TRD.md` | Approved architecture, API, test plan, release and rollback instructions. |
 | `docs/phase53-evidence.md` | Public preview safeguards, browser performance, and reviewer evidence. |
-| `docs/release-candidate.md` | Current paired preview configuration, readiness gates, and owner actions. |
+| `docs/phase62-evidence.md` | Production deployment, smoke checks, accepted firewall limitation, and rollback runbook. |
+| `docs/phase71-acceptance.md` | Requirement-to-evidence closeout matrix and known limitations. |
+| `docs/reviewer-walkthrough.md` | Short Production sample, edit, save, and comparison walkthrough. |
+| `docs/release-candidate.md` | Current Preview and Production configuration, CI, and release evidence. |
 | `progress.md` | Capability status, decisions, evidence, and Git checkpoints. |
 
 ## Known verification limits
 
-Firefox, a physical mobile device, and a screen reader were not tested in the approved browser/accessibility scope. The Linux Chromium and WebKit Playwright matrix is not a substitute for physical-device testing. The current plan is Vercel Hobby; the owner confirmed usage was within quota on 12 October 2026, but that was not a current usage snapshot. Security audit findings and reviewed applicability are recorded in [the Phase 5.3 evidence](docs/phase53-evidence.md); dependency upgrades are tracked separately from this documentation capability.
+Firefox was explicitly deferred by the owner; a physical mobile device and a screen reader were not tested. The Linux Chromium and WebKit Playwright matrix is not a substitute for physical-device or screen-reader testing. The current plan is Vercel Hobby; the owner confirmed usage was within quota on 12 October 2026, but that is not a current usage snapshot. The Production endpoint has no custom Vercel rate-limit rule under this plan, an accepted limitation for the current release. Security audit findings and reviewed applicability are recorded in [the Phase 5.3 evidence](docs/phase53-evidence.md); dependency upgrades remain separate maintenance work. See the [acceptance matrix](docs/phase71-acceptance.md) for gate status and the [reviewer walkthrough](docs/reviewer-walkthrough.md).
