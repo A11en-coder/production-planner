@@ -6,11 +6,11 @@ Last updated: 13 October 2026 (Australia/Sydney)
 
 - Product scope: [PRD v1.0](docs/Production_Planner_PRD.md), 11 October 2026, FR01–FR14 and NFR01–NFR09. The PRD prints “First draft for review”; [TRD v1.0](docs/Production_Planner_TRD.md#3-source-and-scope) records Allen's explicit approval of that scope.
 - Technical design: [TRD v1.0](docs/Production_Planner_TRD.md), 11 October 2026, approved. Its architecture and release gates are specifications, not completed implementation evidence.
-- Overall state: **Capabilities 1.1, 1.2, 2.1–2.4, 3.1–3.3, 4.1–4.3, 5.1–5.3, and 6.1 implemented, verified, approved, and committed**.
-- Current phase: **Phase 6 — public release and recovery**. Last completed capability: **6.1 portfolio documentation and release candidate**. Next capability: **6.2 paired production release and rollback rehearsal**.
+- Overall state: **Capabilities 1.1, 1.2, 2.1–2.4, 3.1–3.3, 4.1–4.3, 5.1–5.3, and 6.1–6.2 implemented, verified, approved, and committed**.
+- Current phase: **Phase 6 — public release and recovery**. Last completed capability: **6.2 paired production release and rollback rehearsal**. Next capability: **7.1 acceptance fixes and honest portfolio evidence**.
 - Calendar start date: **not assigned**. The TRD's weeks are relative; do not infer a calendar deadline.
 - Budget: **180 planned hours**, 12 relative weeks × 15 hours. Capability 1.1 used approximately **1.1 wall-clock hours**, including its intentional 30-minute idle measurement; hands-on time was not separately clocked.
-- Last approved capability: **6.1 portfolio documentation and release candidate**, approved complete on 13 October 2026. Implementation checkpoint: `0c40e67`; separate progress checkpoint recorded in Git history.
+- Last approved capability: **6.2 paired production release and rollback rehearsal**, approved complete on 13 October 2026. Evidence checkpoint: `3d91bf7`; separate progress checkpoint recorded in Git history. The owner accepted the missing Production rate-limit rule as a Hobby-plan exception.
 
 ## Working rules for this tracker
 
@@ -55,7 +55,7 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 ### Phase 6 — public release and recovery (week 11; 15 hours)
 
 - [x] **6.1 Portfolio documentation and release candidate.** Published setup, model/units/assumptions/limitations, local-storage scope, test commands, evidence, configuration, and known limits in the public repository. Confirmed public repository [A11en-coder/production-planner](https://github.com/A11en-coder/production-planner), branch `master`; [GitHub Actions Checks #1](https://github.com/A11en-coder/production-planner/actions/runs/38264084794) passed for `bc86ff1`. The run completed in 2m 32s: backend and frontend/browser jobs passed, including 77 backend tests, 19 frontend unit tests, and 12 Chromium/WebKit tests. GitHub reported Node.js 24 action-runtime and Ubuntu 26 migration notices; these did not fail CI and are recorded in the release candidate. **PRD release checklist; NFR08–NFR09.** Implementation checkpoint: `0c40e67`.
-- [ ] **6.2 Paired production release and rollback rehearsal.** Release backend before frontend, verify old-frontend compatibility, then run public sample/edit/save/compare/reload smoke. Record deployment IDs, effective origins, versions, firewall settings, benchmark pair, and restore steps. Rehearse rollback without clearing browser data. Dependency: 6.1 and G01–G05. Evidence: T17/T18 and **G06**. **FR01–FR14, NFR09.**
+- [x] **6.2 Paired production release and rollback rehearsal.** Deployed the API and web projects from approved source, verified the Production origin pair and health/model identity, then exercised baseline, edited, saved/comparison, infeasible, reload, and rollback calculations. A second identical pair was deployed and both aliases were restored to the first pair; saved browser scenarios survived. Owner accepted the absent Production rate-limit rule after Vercel Hobby presented a Pro upgrade. The active Preview-only rule is unchanged. The rehearsal could not restore a never-deployed state because no earlier successful Production deployment existed. Deployment IDs, smoke results, and restore steps: [Phase 6.2 evidence](docs/phase62-evidence.md); candidate summary: [release candidate](docs/release-candidate.md). **T17/T18; G06 production release/recovery evidence; FR01–FR14, NFR09.** Owner approved 13 October 2026. Evidence checkpoint: `3d91bf7`; progress checkpoint follows separately.
 
 ### Phase 7 — contingency and acceptance (week 12; 15 hours)
 
@@ -181,6 +181,14 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 
 **Completion evidence:** Updated the README and release-candidate status after observing the public push and passing hosted run; no application code changed. `git diff --check` passed. Owner approved completion on 13 October 2026. Implementation checkpoint: `0c40e67`. The production deployment and rollback rehearsal remain Capability 6.2.
 
+## Completed capability record: 6.2 paired production release and rollback rehearsal
+
+**Purpose and outcome:** Release the paired API and web projects to Production, verify the public workflow against the live API, and exercise recovery. The API and web aliases are [production-planner-api.vercel.app](https://production-planner-api.vercel.app) and [production-planner-web-tan.vercel.app](https://production-planner-web-tan.vercel.app). No application source changed; release documentation records the deployed source checkpoint and configuration.
+
+**Representative verification path:** The Production browser completed the baseline (AUD 219.33), edited orange availability (AUD 217.04), saved scenario comparison (−5 L orange availability and −AUD 2.29 contribution), infeasible minimum-order response, and reload checks. A second identical API/web pair reached READY; Vercel rollback restored both aliases to the first pair. The API health endpoint then reported API v1, model `juice-day-v1`, and the restored API build ID. The browser reloaded its two named smoke scenarios and completed another baseline calculation. Individual request times were 0–28 ms as reported by the browser; these are not the full T14 performance matrix or the entire workflow duration.
+
+**Completion evidence and accepted exception:** Details and rollback steps are in [Phase 6.2 evidence](docs/phase62-evidence.md), with the release summary in [release-candidate.md](docs/release-candidate.md). The active Vercel firewall rule remains Preview-only. The owner chose to deploy without a Production rule after the Hobby dashboard offered a Pro upgrade; this gap is explicitly accepted for this release. The rollback rehearsal restored the first successful pair after an identical second pair; the prior no-service state could not be restored because no successful Production deployment existed before 6.2. Owner approved completion on 13 October 2026. Evidence checkpoint: `3d91bf7`; implementation/progress were committed separately.
+
 ## Decisions, dependencies, and open risks
 
 | Item | Current record |
@@ -192,7 +200,7 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 | Package versions and devices | Dependency versions are pinned. Browser emulation used Chromium and WebKit; Firefox is deferred. No physical-device or screen-reader run was available. |
 | Scope boundary | Three blends, three ingredients, one day, continuous litres, no waste, free services; no accounts, cloud storage, arbitrary products, integer bottles, exports, or other excluded extensions. |
 | Performance | **G01 spike evidence passed**: idle 3484.6 ms; warm 581.3 ms; five concurrent 756.2–2844.0 ms. Final T14 requires the full set of 20 warm, three concurrent batches, and three after-inactivity calls on the completed dashboard. |
-| Release | Public preview pair and initial GitHub CI passed under 6.1. Capability 6.2 still owns the production deployment and rollback rehearsal, including G06/T17/T18 production checks. Firefox, physical-device, and screen-reader verification remain unperformed. Public preview is not a production release. |
+| Release | Production aliases are live and rollback was rehearsed between two equivalent deployment pairs; see [Phase 6.2 evidence](docs/phase62-evidence.md). The Production rate-limit rule is absent by owner choice under the Hobby plan and remains an accepted safeguard gap. Firefox, physical-device, and screen-reader verification remain unperformed. |
 
 ## Evidence and checkpoint log
 
@@ -214,5 +222,6 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 | 12 Oct 2026 | Capability 5.1 / automated cross-layer checks | Owner approved; npm ci, lint, typecheck, 19 frontend unit tests, production build, 77 backend tests, two Chromium Playwright tests, production dependency audit, and diff check pass. GitHub workflow authored, not run remotely. Full audit has five high dev-only transitive dependency findings; see completed capability record. | Not separately tracked | `6d28b0e` |
 | 12 Oct 2026 | Capability 5.2 / accessibility and browser matrix | Owner approved scoped completion (Chromium/WebKit); all 12 Playwright tests pass at the three target widths, plus 640px zoom-equivalent reflow; axe, keyboard/error/status/table checks pass. Lint, typecheck, 19 unit tests, build, and diff check pass. Firefox deferred by owner after restart did not resolve its missing `mozglue` assembly activation error. No physical-device or screen-reader coverage. | Not separately tracked | `ef0eb40` |
 | 13 Oct 2026 | Capability 6.1 / portfolio documentation and release candidate | Owner approved; public repository and `master` branch confirmed; GitHub Actions Checks #1 passed on `bc86ff1` in 2m 32s with backend and frontend/browser jobs successful. README and release-candidate record updated with the hosted evidence and non-failing runner/action warnings; diff check passed. Production release and rollback remain 6.2. | Not separately tracked | `0c40e67` |
+| 13 Oct 2026 | Capability 6.2 / paired Production release and rollback rehearsal | Owner approved completion and checkpoints. API/web deployed and smoke-tested; identical second pair reached READY; rollback restored both aliases to the first pair; browser storage survived reload and rollback. Production rate limit absent by explicit owner-approved Hobby-plan exception. Evidence and runbook in [phase62-evidence.md](docs/phase62-evidence.md); release candidate updated. `git diff --check` passed. | Not separately tracked | Evidence: `3d91bf7`; progress: this separate checkpoint |
 
 When closing a capability, add its check results, relevant PRD/TRD IDs, approval/decision, actual hours, and Git commit here; then advance the current phase/capability above. Keep failures and unresolved risks visible rather than checking a gate based on intent.
