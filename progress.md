@@ -6,11 +6,11 @@ Last updated: 12 October 2026 (Australia/Sydney)
 
 - Product scope: [PRD v1.0](docs/Production_Planner_PRD.md), 11 October 2026, FR01–FR14 and NFR01–NFR09. The PRD prints “First draft for review”; [TRD v1.0](docs/Production_Planner_TRD.md#3-source-and-scope) records Allen's explicit approval of that scope.
 - Technical design: [TRD v1.0](docs/Production_Planner_TRD.md), 11 October 2026, approved. Its architecture and release gates are specifications, not completed implementation evidence.
-- Overall state: **planning complete; Capability 1.1 implemented, verified, approved, and committed**. Capability 1.2 is queued and has not started as a separate work package.
-- Current phase: **Phase 1 — feasibility and foundations**. Last completed capability: **1.1 capped hosting spike**. Next capability: **1.2 repository/API foundations**, queued.
+- Overall state: **planning complete; Capabilities 1.1 and 1.2 implemented, verified, approved, and committed**. Capability 2.1 is queued.
+- Current phase: **Phase 1 — feasibility and foundations**. Last completed capability: **1.2 repository/API foundations**. Next capability: **2.1 input schema and validation**, queued.
 - Calendar start date: **not assigned**. The TRD's weeks are relative; do not infer a calendar deadline.
 - Budget: **180 planned hours**, 12 relative weeks × 15 hours. Capability 1.1 used approximately **1.1 wall-clock hours**, including its intentional 30-minute idle measurement; hands-on time was not separately clocked.
-- Last approved capability: **1.1 hosting/Python API spike**, explicitly approved 12 October 2026. Capability checkpoint: `a9c44b1`.
+- Last approved capability: **1.2 repository/API foundations**, explicitly approved 12 October 2026. Capability checkpoint: `CAPABILITY_1_2_COMMIT`.
 
 ## Working rules for this tracker
 
@@ -25,7 +25,7 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 ### Phase 1 — feasibility and foundations (week 1; 15 hours)
 
 - [x] **1.1 Hosting/Python API spike — maximum 10 hours.** G01 passed in approximately 1.1 wall-clock hours. The public Hobby preview pair returned the PRD baseline, edited sample, all four exact shortages, safe validation and timeout errors, and exact paired CORS. Final preview click-to-render: 3484.6 ms after ≥30 minutes idle, 581.3 ms warm, 756.2–2844.0 ms in five concurrent sessions, 539.7 ms for the edited sample. Evidence and unresolved risks: [hosting spike record](docs/hosting-spike-evidence.md). Final T14 remains later work. Commit: `a9c44b1`. [TRD §§16, 18](docs/Production_Planner_TRD.md#16-deployment-and-rollout)
-- [ ] **1.2 Repository/API foundations.** Partially established as supporting work for 1.1: separate `frontend/` and `backend/` projects, fixed API/model version constants, `/health`, sample contract fixture, pinned production dependencies, and minimal checks now exist. Remaining: document reproducible local startup commands and complete the reusable API foundation/contract work without duplicating the spike harness. Keep development dependencies outside the production Python bundle. Dependency: 1.1 passed. Evidence: local startup/check instructions and stable API foundation. [TRD §8](docs/Production_Planner_TRD.md#8-repository-and-configuration)
+- [x] **1.2 Repository/API foundations.** Added [README.md](README.md) with reproducible local API/web startup and check commands, runtime versus development dependency guidance, project map, model limits, and API/fixture contract notes. Confirmed the existing fixture-driven API foundation without duplicating spike code. Dependency: 1.1 passed. Evidence: 9 backend tests passed; frontend typecheck/build passed; local Uvicorn and Next.js startup plus health, baseline optimize (AUD 219.3333), and frontend HTTP 200 smoke checks passed. No API runtime changes. Relevant design: [TRD §§8, 10](docs/Production_Planner_TRD.md#8-repository-and-configuration); **NFR08**. Owner approved completion 12 October 2026. Commit: `CAPABILITY_1_2_COMMIT`.
 
 ### Phase 2 — trusted optimization API (weeks 2–3; 30 hours)
 
@@ -69,13 +69,21 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 
 **Completion evidence:** previews `production-planner-api-spike-20261012` and `production-planner-web-spike-20261012`; Python 3.12 and pinned dependencies; baseline/edit/shortage results; invalid-input and solver-timeout handling; exact paired CORS; warm, concurrent, and after-inactivity browser timings; explicit owner approval; checkpoint `a9c44b1`. The exact uncompressed function bundle size was not exposed. Final performance acceptance waits for T14 on the complete UI.
 
+## Completed capability record: 1.2 repository/API foundations
+
+**Purpose and outcome:** Make the existing spike repository and API contract reproducible and understandable for the next implementation capabilities. Added [README.md](README.md); the API and frontend implementation were already established in 1.1, so this capability did not duplicate or restructure them.
+
+**Documented request path:** [frontend `Home.calculate()`](frontend/src/app/page.tsx) posts JSON to [FastAPI `calculate()`](backend/app/main.py), which applies transport/version checks, calls [validation](backend/app/validation.py), and passes valid models to [the optimizer](backend/app/optimizer.py). The UI checks response compatibility before rendering. [The sample fixture](contracts/sample-request.json) is shared with backend tests.
+
+**Completion evidence:** 9 backend tests passed; `npm run typecheck` and `npm run build` passed; local API and Next.js development servers started from the documented commands, `/health` returned ready, the fixture returned an optimal AUD 219.3333 baseline, and the frontend returned HTTP 200. One existing Starlette/AnyIO deprecation warning remains. Owner explicitly approved the walkthrough and completion on 12 October 2026; checkpoint `CAPABILITY_1_2_COMMIT`.
+
 ## Decisions, dependencies, and open risks
 
 | Item | Current record |
 | --- | --- |
 | Architecture | Approved ADR01–ADR08 in [TRD §19](docs/Production_Planner_TRD.md#19-risks-and-decisions): separate Next.js/FastAPI projects, SciPy HiGHS, browser-local versioned collection, conditional two-project Vercel Hobby hosting, numeric/failure policies, manual release, and verification matrix. |
 | Hosting feasibility | **G01 passed.** Hobby account and displayed usage were confirmed; the SciPy API deployed and all final-pair browser timings were under five seconds. Exact uncompressed bundle size is unavailable. One earlier browser `Failed to fetch` did not recur in the final eight accepted calls; its cause remains unknown and must stay visible in later T13/T14 evidence. |
-| Repository and calendar | Public repository URL and calendar start date are not recorded; no commit exists. Record these when actually established. |
+| Repository and calendar | Public repository URL and calendar start date are not recorded. Local commits establish implementation checkpoints; publish URL only when the repository is actually published. |
 | Package versions and devices | Exact tested versions and real-device availability remain to be recorded during implementation. |
 | Scope boundary | Three blends, three ingredients, one day, continuous litres, no waste, free services; no accounts, cloud storage, arbitrary products, integer bottles, exports, or other excluded extensions. |
 | Performance | **G01 spike evidence passed**: idle 3484.6 ms; warm 581.3 ms; five concurrent 756.2–2844.0 ms. Final T14 requires the full set of 20 warm, three concurrent batches, and three after-inactivity calls on the completed dashboard. |
@@ -87,5 +95,6 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 | --- | --- | --- | ---: | --- |
 | 12 Oct 2026 | Planning intake | PRD/TRD read; repository inventory found planning documents only. No application checks or deployment claimed. | Not recorded | None |
 | 12 Oct 2026 | Capability 1.1 / G01 | Passed; owner approved; browser/API evidence in [hosting-spike-evidence.md](docs/hosting-spike-evidence.md). Progress tracking recorded in this commit. | ~1.1 elapsed hours (includes 30-min idle wait) | `a9c44b1` |
+| 12 Oct 2026 | Capability 1.2 / repository/API foundations | Owner approved; README setup and contract documentation; 9 backend tests, frontend typecheck/build, and local API/web startup smoke passed. | Not separately tracked | `CAPABILITY_1_2_COMMIT` |
 
 When closing a capability, add its check results, relevant PRD/TRD IDs, approval/decision, actual hours, and Git commit here; then advance the current phase/capability above. Keep failures and unresolved risks visible rather than checking a gate based on intent.
