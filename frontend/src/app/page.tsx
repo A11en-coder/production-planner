@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import {
   BLEND_IDS,
   BLEND_LABELS,
@@ -12,6 +12,7 @@ import {
   type PlanningInputs,
 } from "@/lib/planner";
 import { validateInputs } from "@/lib/validation";
+import { ApiRequestError, CALCULATION_DEADLINE_MS, calculate, type CalculationResult } from "@/lib/api";
 
 type FieldProps = {
   id: string;
@@ -50,55 +51,135 @@ function Field({ id, label, value, inputMode = "decimal", unit, hint, error, onC
 export default function Home() {
   const [inputs, setInputs] = useState<PlanningInputs>(() => structuredClone(SAMPLE_INPUTS));
   const [submitted, setSubmitted] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [calculationState, setCalculationState] = useState<{
+    kind: "idle" | "pending" | "success" | "error";
+    message?: string;
+    requestId?: string;
+  }>({ kind: "idle" });
+  const [result, setResult] = useState<CalculationResult | null>(null);
+  const [resultRevision, setResultRevision] = useState<number | null>(null);
+  const revision = useRef(0);
+  const activeRequest = useRef<{
+    revision: number;
+    controller: AbortController;
+    timer: number;
+    timedOut: boolean;
+  } | null>(null);
   const errors = useMemo(() => validateInputs(inputs), [inputs]);
   const hasErrors = Object.keys(errors).length > 0;
+  const resultIsOutdated = result !== null && resultRevision !== revision.current;
+
+  function invalidateActiveRequest() {
+    const active = activeRequest.current;
+    if (active) {
+      window.clearTimeout(active.timer);
+      active.controller.abort();
+      activeRequest.current = null;
+    }
+    revision.current += 1;
+    setCalculationState({ kind: "idle" });
+  }
 
   function updateBlend(blendId: BlendId, field: "profit_aud_per_litre" | "processing_minutes_per_litre" | "min_litres" | "max_litres", value: string) {
+    invalidateActiveRequest();
     setInputs((current) => ({
       ...current,
       blends: current.blends.map((blend) => blend.id === blendId ? { ...blend, [field]: value } : blend),
     }));
-    setNotice("");
   }
 
   function updateRecipe(blendId: BlendId, ingredient: IngredientId, value: string) {
+    invalidateActiveRequest();
     setInputs((current) => ({
       ...current,
       blends: current.blends.map((blend) => blend.id === blendId
         ? { ...blend, recipe_percent: { ...blend.recipe_percent, [ingredient]: value } }
         : blend),
     }));
-    setNotice("");
   }
 
   function updateAvailability(ingredient: IngredientId, value: string) {
+    invalidateActiveRequest();
     setInputs((current) => ({
       ...current,
       available_ingredient_litres: { ...current.available_ingredient_litres, [ingredient]: value },
     }));
-    setNotice("");
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitted(true);
     if (hasErrors) {
-      setNotice("Review the highlighted fields before continuing.");
+      setCalculationState({ kind: "error", message: "Review the highlighted fields before calculating." });
       return;
     }
-    setNotice("Inputs are valid. The calculation service is not connected yet.");
+    void runCalculation();
   }
 
   function resetSample() {
+    invalidateActiveRequest();
     setInputs(structuredClone(SAMPLE_INPUTS));
     setSubmitted(false);
-    setNotice("");
+  }
+
+  async function runCalculation() {
+    if (activeRequest.current?.revision === revision.current) return;
+    if (hasErrors) {
+      setSubmitted(true);
+      setCalculationState({ kind: "error", message: "Review the highlighted fields before calculating." });
+      return;
+    }
+    const previous = activeRequest.current;
+    if (previous) {
+      window.clearTimeout(previous.timer);
+      previous.controller.abort();
+    }
+    const controller = new AbortController();
+    const request = {
+      revision: revision.current,
+      controller,
+      timer: 0,
+      timedOut: false,
+    };
+    activeRequest.current = request;
+    request.timer = window.setTimeout(() => {
+      request.timedOut = true;
+      controller.abort();
+    }, CALCULATION_DEADLINE_MS);
+    setCalculationState({ kind: "pending", message: "Checking the scenario against available resources…" });
+
+    try {
+      const snapshot = structuredClone(inputs);
+      const response = await calculate(snapshot, controller.signal);
+      if (activeRequest.current !== request || revision.current !== request.revision) return;
+      setResult(response);
+      setResultRevision(request.revision);
+      setCalculationState({ kind: "success", message: "Calculation complete." });
+    } catch (cause) {
+      if (activeRequest.current !== request || revision.current !== request.revision) return;
+      const message = request.timedOut
+        ? "Calculation exceeded the 10-second deadline. Your inputs are unchanged; retry when ready."
+        : cause instanceof DOMException && cause.name === "AbortError"
+          ? "Calculation was cancelled. Your inputs are unchanged."
+          : cause instanceof ApiRequestError || cause instanceof Error
+            ? cause.message
+            : "Calculation failed. Your inputs are unchanged; retry manually.";
+      setCalculationState({
+        kind: "error",
+        message,
+        requestId: cause instanceof ApiRequestError ? cause.requestId : undefined,
+      });
+    } finally {
+      window.clearTimeout(request.timer);
+      if (activeRequest.current === request) activeRequest.current = null;
+    }
   }
 
   function fieldError(path: string) {
     return submitted ? errors[path] : undefined;
   }
+
+  const isPending = calculationState.kind === "pending";
 
   function blendInput(blendId: BlendId) {
     return inputs.blends.find((blend) => blend.id === blendId)!;
@@ -162,7 +243,7 @@ export default function Home() {
               value={inputs.processing_capacity_hours}
               hint="Shared across all blends"
               error={fieldError("processing_capacity_hours")}
-              onChange={(value) => { setInputs((current) => ({ ...current, processing_capacity_hours: value })); setNotice(""); }}
+              onChange={(value) => { invalidateActiveRequest(); setInputs((current) => ({ ...current, processing_capacity_hours: value })); }}
             />
           </div>
         </section>
@@ -215,9 +296,28 @@ export default function Home() {
 
         <div className="form-actions">
           <div className="action-copy"><span className="action-spark" aria-hidden="true">✦</span><span>Ready when your inputs are set.</span></div>
-          <button className="primary-button" type="submit">Optimize scenario <span aria-hidden="true">↗</span></button>
+          <button className="primary-button" type="submit" disabled={isPending}>
+            {isPending ? "Optimizing…" : "Optimize scenario"} <span aria-hidden="true">{isPending ? "◌" : "↗"}</span>
+          </button>
         </div>
-        {notice && <p className={hasErrors ? "form-notice form-notice-error" : "form-notice"} role="status">{notice}</p>}
+        {calculationState.message && <div className={`form-notice ${calculationState.kind === "error" ? "form-notice-error" : ""}`} role={calculationState.kind === "error" ? "alert" : "status"} aria-live="polite">
+          <span>{calculationState.message}{calculationState.requestId && <small className="error-request-id">Request {calculationState.requestId}</small>}</span>
+          {calculationState.kind === "error" && !hasErrors && <button type="button" className="retry-button" onClick={() => void runCalculation()}>Retry</button>}
+        </div>}
+        {result && <section className="result-panel" aria-labelledby="result-heading" aria-live="polite">
+          <div className="result-title-row">
+            <div><p className="eyebrow">Calculation response</p><h3 id="result-heading">{result.status === "optimal" ? "Recommended production" : "Minimum orders exceed resources"}</h3></div>
+            {resultIsOutdated && <span className="outdated-badge">OUTDATED INPUTS</span>}
+          </div>
+          {result.status === "optimal" ? <>
+            <div className="result-summary"><span>Contribution</span><strong>AUD {result.profit_contribution_aud.toFixed(2)}</strong></div>
+            <dl className="quantity-list">{BLEND_IDS.map((blendId) => <div key={blendId}><dt>{BLEND_LABELS[blendId]}</dt><dd>{result.production_litres[blendId].toFixed(3)} L</dd></div>)}</dl>
+          </> : <ul className="shortage-list">{result.shortages.map((shortage) => <li key={shortage.resource_id}>
+            <span>{shortage.resource_id === "processing" ? "Processing" : INGREDIENT_LABELS[shortage.resource_id]}</span>
+            <span>Short {shortage.shortfall} {shortage.unit}</span>
+          </li>)}</ul>}
+          <p className="request-reference">Request {result.request_id} <span>·</span> {result.duration_ms.toFixed(0)} ms</p>
+        </section>}
       </form>
 
       <aside className="sidebar" aria-label="Model guide">
