@@ -1,6 +1,6 @@
 # Production Planner release candidate
 
-Record updated 13 October 2026 (Australia/Sydney). This document records the paired public preview and the completed repository/CI gates for Capability 6.1. It does not authorize or perform a production release; production deployment and rollback belong to Capability 6.2.
+Record updated 13 October 2026 (Australia/Sydney). This document records the paired public preview, completed repository/CI gates, and the Capability 6.2 production release and rollback rehearsal. Production evidence and the accepted Hobby firewall limit are in [Phase 6.2 evidence](phase62-evidence.md).
 
 ## Candidate overview
 
@@ -15,7 +15,23 @@ Record updated 13 October 2026 (Australia/Sydney). This document records the pai
 | Git source | Public repository [A11en-coder/production-planner](https://github.com/A11en-coder/production-planner), branch `master`, published through commit `bc86ff1`. |
 | CI | [Initial `Checks` run #1](https://github.com/A11en-coder/production-planner/actions/runs/38264084794) passed on push for `bc86ff1` on 13 October 2026. Backend and frontend/browser jobs succeeded. |
 
-The frontend preview was built with `NEXT_PUBLIC_BACKEND_URL` set to the API preview alias. The API preview's `ALLOWED_ORIGINS` contains exactly the frontend preview origin. No production environment values were changed. The API's active 30-request-per-source-IP-per-60-second rule matches only preview `POST /api/v1/optimize`; over-limit requests receive HTTP 429. It does not match production-environment requests.
+The frontend preview was built with `NEXT_PUBLIC_BACKEND_URL` set to the API preview alias. The API preview's `ALLOWED_ORIGINS` contains exactly the frontend preview origin. Production now uses the paired aliases below. The active 30-request-per-source-IP-per-60-second firewall rule still matches only Preview `POST /api/v1/optimize`; at the owner's direction, no separate Production rate rule was enabled because Vercel offered a Pro upgrade when submitting it from the Hobby plan.
+
+## Production deployment
+
+| Item | Production state after rollback rehearsal |
+| --- | --- |
+| Frontend alias | [production-planner-web-tan.vercel.app](https://production-planner-web-tan.vercel.app) |
+| API alias | [production-planner-api.vercel.app](https://production-planner-api.vercel.app) |
+| Frontend currently assigned deployment | `dpl_4KGwF4QCZwQbeaUJbHUEW9hL5Qm7`, READY, Production; restored after identical deployment `dpl_D5Ye1EcjKZpwXTkquoaPKEmKkekD` |
+| API currently assigned deployment | `dpl_AKK7mYKRkNBBGcM1Ppu21tevnoa5`, READY, Production; restored after identical deployment `dpl_BbTP6A5uUzvwPwQ7hshArVv4x9aq` |
+| Source | Approved, clean repository state at `a782db60499508c98fbf48a10316a624882186e5` (`master`); uploaded source files were taken from that commit |
+| API identity | API version `1`; model version `juice-day-v1`; production `/health` returned build ID `dpl_AKK7mYKRkNBBGcM1Ppu21tevnoa5` after rollback |
+| Runtime region | Vercel deployment metadata reports `iad1` for both Production deployments |
+| Production environment variables | API `ALLOWED_ORIGINS` targets only Production and contains the web alias above; web `NEXT_PUBLIC_BACKEND_URL` targets only Production and points to the API alias. Preview-only values remain in Preview. |
+| Production rate limiting | Not configured, by owner choice after Vercel Hobby presented a Pro upgrade prompt. The existing Preview-only rule remains active and unchanged. See accepted safeguard gap in [Phase 6.2 evidence](phase62-evidence.md). |
+
+The rollback rehearsal started with no successful Production deployment. It created a first pair and a second pair from the same source and configuration, then restored both aliases to the first pair. It proves rollback between equivalent releases and that same-origin browser storage survives; it cannot restore the earlier no-service state.
 
 ## Verified evidence
 
@@ -33,12 +49,12 @@ The frontend preview was built with `NEXT_PUBLIC_BACKEND_URL` set to the API pre
 | Local backend/frontend/browser verification | Passed 13 October 2026 | `npm ci --no-audit --no-fund`; backend 77 tests; frontend lint, typecheck, 19 unit/component tests, production build, and 12 Chromium/WebKit Playwright tests. The Windows sandbox stalled some worker-based checks; they completed with normal local process access. |
 | Public GitHub repository | Passed | [A11en-coder/production-planner](https://github.com/A11en-coder/production-planner) is public and contains the approved `master` history. |
 | GitHub Actions run | Passed | [Checks #1](https://github.com/A11en-coder/production-planner/actions/runs/38264084794): backend and frontend/browser jobs succeeded. |
-| Production deploy and rollback rehearsal | Not part of 6.1 | Capability 6.2, after the release candidate and G06 prerequisites are reviewed |
+| Production deploy and rollback rehearsal | Passed with owner-approved rate-limit exception | Production sample/edit/save/compare/reload/infeasible flow passed; identical second pair rolled back to the first pair; browser scenarios survived. See [Phase 6.2 evidence](phase62-evidence.md). |
 
 The first hosted run completed in 2m 32s. It passed the 77-test backend suite, frontend lint/typecheck/build, 19 frontend unit tests, and 12 Chromium/WebKit browser tests. GitHub attached informational warnings that the current `actions/checkout@v4`, `actions/setup-node@v4`, and `actions/setup-python@v5` releases are being forced to Node.js 24, and that `ubuntu-latest` will migrate to Ubuntu 26 beginning 19 October 2026. These did not fail the run; review action/runtime updates as maintenance.
 
 The owner created the public repository and pushed the approved local history. The repository includes the PRD, TRD, README, progress record, test workflow, and evidence. No Vercel token or deployment credential is required by CI.
 
-The tracked-file credential scan passed before publication, and `.gitignore` excludes local `.env` files, virtual environments, dependency directories, and `.codex/` user state. Production deployment and rollback remain separate work under Capability 6.2.
+The tracked-file credential scan passed before publication, and `.gitignore` excludes local `.env` files, virtual environments, dependency directories, and `.codex/` user state. Production deployment and rollback were completed under Capability 6.2; the Production rate limit remains an explicitly accepted Hobby-plan gap.
 
 Local Next.js build and Playwright runs passed. Next.js printed a Windows-host warning about an ancestor `C:\Users\Allen\package-lock.json` outside this Git repository and ignored it; the build used the repository's pinned frontend lockfile and completed. `npm ci` also warned that pinned ESLint 9.39.5 is deprecated. The linter passed; toolchain upgrades remain separate maintenance work.
