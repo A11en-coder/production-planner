@@ -137,7 +137,7 @@ function parseApiError(payload: unknown, status: number): ApiRequestError {
   return new ApiRequestError(payload.error.message, payload.error.code, payload.request_id);
 }
 
-function parseCalculationResult(payload: unknown): CalculationResult | null {
+export function parseCalculationResult(payload: unknown): CalculationResult | null {
   if (!isRecord(payload) || payload.api_version !== API_VERSION || payload.model_version !== MODEL_VERSION ||
       typeof payload.request_id !== "string" || !UUID.test(payload.request_id) ||
       !isFiniteNumber(payload.duration_ms) || payload.duration_ms < 0) return null;

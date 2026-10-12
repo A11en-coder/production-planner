@@ -57,6 +57,30 @@ h1 span { color: var(--mint); }
 .notice-strip strong { color: #f0d5a5; font-weight: 600; }
 .notice-icon { display: grid; place-items: center; flex: 0 0 19px; height: 19px; border: 1px solid #e1bc7977; border-radius: 50%; color: #f0d5a5; font: 600 11px Georgia, serif; }
 .sample-tag { color: #cfb787; font-size: 9px; font-weight: 700; letter-spacing: .12em; white-space: nowrap; }
+.scenario-panel { margin: -12px 0 24px; padding: 17px 19px; border: 1px solid #405348; border-radius: 12px; background: linear-gradient(145deg, #1b2823, #17211f); }
+.scenario-panel-heading { display: flex; align-items: end; justify-content: space-between; gap: 12px; }
+.scenario-panel-heading .eyebrow { margin: 0 0 4px; color: #8fa095; font-size: 8px; }
+.scenario-panel-heading h2 { margin: 0; font: 600 17px "Manrope", sans-serif; letter-spacing: -.03em; }
+.scenario-count { color: #a4b2a7; font-size: 9px; font-variant-numeric: tabular-nums; }
+.scenario-storage-copy { margin: 7px 0 12px; color: #9ba99f; font-size: 10px; line-height: 1.45; }
+.scenario-save-row { display: flex; align-items: end; gap: 10px; }
+.scenario-name-field { flex: 1; }
+.scenario-name-field input { width: 100%; min-width: 0; height: 39px; padding: 0 10px; border: 1px solid #3a4b43; border-radius: 7px; background: #111a17; color: #f1f5ee; font: 500 12px Inter, ui-sans-serif, system-ui, sans-serif; }
+.scenario-name-field input:focus-visible { outline: 2px solid #d6ffe1; outline-offset: 2px; }
+.save-button, .open-scenario-button { min-height: 38px; padding: 0 13px; border: 1px solid #bce5c5; border-radius: 7px; background: #b5edc9; color: #193125; font-size: 10px; font-weight: 700; cursor: pointer; }
+.save-button:hover, .open-scenario-button:hover { background: #d1f7d9; }
+.save-button:disabled { opacity: .48; cursor: not-allowed; }
+.store-help, .empty-scenarios { margin: 8px 0 0; color: #9eaca1; font-size: 9px; }
+.saved-scenario-list { display: grid; gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; }
+.saved-scenario-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 10px; border: 1px solid #ffffff14; border-radius: 8px; background: #11191699; }
+.saved-scenario-list strong { display: block; color: #e4ece2; font-size: 10px; overflow-wrap: anywhere; }
+.saved-scenario-list small { display: block; margin-top: 3px; color: #99aa9e; font-size: 9px; }
+.open-scenario-button { min-height: 31px; flex: 0 0 auto; padding: 0 11px; }
+.store-warning, .store-message { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; padding: 9px 10px; border: 1px solid #d8a56e55; border-radius: 7px; background: #d8a56e0b; color: #e0c291; font-size: 10px; line-height: 1.45; }
+.store-message-success { border-color: #8ec59a55; background: #b5edc90d; color: #c8e4ce; }
+.store-message-error { border-color: #e48c7d55; background: #e48c7d0d; color: #f0b1a3; }
+.recovery-button { flex: 0 0 auto; padding: 5px 8px; border: 1px solid currentColor; border-radius: 6px; background: transparent; color: inherit; font-size: 9px; font-weight: 700; cursor: pointer; }
+.recovery-button:focus-visible, .save-button:focus-visible, .open-scenario-button:focus-visible { outline: 2px solid #d6ffe1; outline-offset: 2px; }
 
 .workspace-grid { display: grid; grid-template-columns: minmax(0, 1fr) 274px; align-items: start; gap: 24px; }
 .planner-form { min-width: 0; }
@@ -203,6 +227,7 @@ h1 span { color: var(--mint); }
   .notice-strip { align-items: flex-start; margin-bottom: 21px; padding: 11px; }
   .notice-icon { margin-top: 1px; }
   .sample-tag { display: none; }
+  .scenario-panel { margin-top: -8px; padding: 15px 13px; }
   .workspace-grid { display: flex; flex-direction: column; }
   .planner-form, .sidebar { width: 100%; }
   .sidebar { position: static; grid-template-columns: minmax(0, 1fr); margin-top: 7px; }
@@ -227,6 +252,9 @@ h1 span { color: var(--mint); }
   .unit { font-size: 8px; }
   .field input { height: 37px; padding: 0 8px; font-size: 12px; }
   .form-actions { align-items: stretch; flex-direction: column; }
+  .scenario-save-row { align-items: stretch; flex-direction: column; }
+  .save-button { min-height: 42px; }
+  .store-warning, .store-message { align-items: flex-start; flex-direction: column; }
   .action-copy { justify-content: center; }
   .primary-button { width: 100%; }
   .quantity-list { grid-template-columns: 1fr; }

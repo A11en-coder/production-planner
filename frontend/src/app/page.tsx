@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useRef, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   BLEND_IDS,
   BLEND_LABELS,
@@ -12,8 +12,16 @@ import {
   type PlanningInputs,
 } from "@/lib/planner";
 import { validateInputs } from "@/lib/validation";
-import { ApiRequestError, CALCULATION_DEADLINE_MS, calculate, type CalculationResult } from "@/lib/api";
+import { API_VERSION, MODEL_VERSION, ApiRequestError, CALCULATION_DEADLINE_MS, calculate, type CalculationResult } from "@/lib/api";
 import { formatContribution, formatPercent, formatPrecision, formatQuantity } from "@/lib/display";
+import {
+  readScenarioStore,
+  resetScenarioStore,
+  ScenarioStoreError,
+  samePlanningInputs,
+  saveScenario,
+  type ScenarioStoreState,
+} from "@/lib/scenario-store";
 
 type FieldProps = {
   id: string;
@@ -60,6 +68,11 @@ export default function Home() {
   const [result, setResult] = useState<CalculationResult | null>(null);
   const [resultInputs, setResultInputs] = useState<PlanningInputs | null>(null);
   const [resultRevision, setResultRevision] = useState<number | null>(null);
+  const [storeState, setStoreState] = useState<ScenarioStoreState>({ kind: "unavailable", message: "Loading saved scenarios…" });
+  const [scenarioName, setScenarioName] = useState("");
+  const [storeMessage, setStoreMessage] = useState("");
+  const [storeMessageKind, setStoreMessageKind] = useState<"success" | "error" | "info">("info");
+  const [hasUnsavedWork, setHasUnsavedWork] = useState(true);
   const revision = useRef(0);
   const activeRequest = useRef<{
     revision: number;
@@ -70,6 +83,19 @@ export default function Home() {
   const errors = useMemo(() => validateInputs(inputs), [inputs]);
   const hasErrors = Object.keys(errors).length > 0;
   const resultIsOutdated = result !== null && resultRevision !== revision.current;
+
+  useEffect(() => {
+    refreshStoredScenarios();
+  }, []);
+
+  function refreshStoredScenarios() {
+    try {
+      setStoreState(readScenarioStore(window.localStorage));
+      setStoreMessage("");
+    } catch {
+      setStoreState({ kind: "unavailable", message: "Browser storage is unavailable. Your current work is still usable in this tab." });
+    }
+  }
 
   function invalidateActiveRequest() {
     const active = activeRequest.current;
@@ -84,6 +110,7 @@ export default function Home() {
 
   function updateBlend(blendId: BlendId, field: "profit_aud_per_litre" | "processing_minutes_per_litre" | "min_litres" | "max_litres", value: string) {
     invalidateActiveRequest();
+    setHasUnsavedWork(true);
     setInputs((current) => ({
       ...current,
       blends: current.blends.map((blend) => blend.id === blendId ? { ...blend, [field]: value } : blend),
@@ -92,6 +119,7 @@ export default function Home() {
 
   function updateRecipe(blendId: BlendId, ingredient: IngredientId, value: string) {
     invalidateActiveRequest();
+    setHasUnsavedWork(true);
     setInputs((current) => ({
       ...current,
       blends: current.blends.map((blend) => blend.id === blendId
@@ -102,6 +130,7 @@ export default function Home() {
 
   function updateAvailability(ingredient: IngredientId, value: string) {
     invalidateActiveRequest();
+    setHasUnsavedWork(true);
     setInputs((current) => ({
       ...current,
       available_ingredient_litres: { ...current.available_ingredient_litres, [ingredient]: value },
@@ -122,6 +151,65 @@ export default function Home() {
     invalidateActiveRequest();
     setInputs(structuredClone(SAMPLE_INPUTS));
     setSubmitted(false);
+    setHasUnsavedWork(true);
+    setStoreMessage("");
+  }
+
+  function saveCurrentScenario() {
+    try {
+      const currentResult = result && resultRevision === revision.current && !resultIsOutdated &&
+        resultInputs && samePlanningInputs(inputs, resultInputs) ? result : null;
+      const saved = saveScenario(window.localStorage, storeState, scenarioName, inputs, currentResult,
+        currentResult ? resultInputs : null);
+      setStoreState(saved);
+      setStoreMessage(`“${scenarioName.trim()}” was saved in this browser.`);
+      setStoreMessageKind("success");
+      setHasUnsavedWork(false);
+      setScenarioName("");
+    } catch (cause) {
+      setStoreMessage(cause instanceof ScenarioStoreError ? cause.message : "The scenario was not saved. Your current work remains available; retry when ready.");
+      setStoreMessageKind("error");
+    }
+  }
+
+  function openSavedScenario(id: string) {
+    if (hasUnsavedWork && !window.confirm("Open this saved scenario and replace the current unsaved planner work?")) return;
+    if (storeState.kind !== "ready") return;
+    const scenario = storeState.scenarios.find((item) => item.id === id);
+    if (!scenario) return;
+    invalidateActiveRequest();
+    const openedInputs = structuredClone(scenario.inputs);
+    const compatibleResult = scenario.result && !scenario.result_outdated && scenario.result_input_snapshot &&
+      samePlanningInputs(openedInputs, scenario.result_input_snapshot) &&
+      scenario.result.api_version === API_VERSION && scenario.result.model_version === MODEL_VERSION
+      ? scenario.result
+      : null;
+    setInputs(openedInputs);
+    setSubmitted(false);
+    setResult(compatibleResult ? structuredClone(compatibleResult) : null);
+    setResultInputs(compatibleResult && scenario.result_input_snapshot ? structuredClone(scenario.result_input_snapshot) : null);
+    setResultRevision(compatibleResult ? revision.current : null);
+    setHasUnsavedWork(false);
+    setStoreMessage(compatibleResult
+      ? `Opened “${scenario.name}” with its saved result.`
+      : scenario.result_outdated
+        ? `Opened “${scenario.name}”. Its saved result is outdated or incompatible; calculate again to refresh it.`
+        : `Opened “${scenario.name}”. This scenario has no current calculation result.`);
+    setStoreMessageKind(compatibleResult ? "success" : "info");
+  }
+
+  function recoverSavedCollection() {
+    const confirmed = window.confirm("Reset the saved browser collection? This permanently removes every saved scenario in this browser. Your current unsaved inputs will remain in the planner.");
+    if (!confirmed) return;
+    try {
+      const reset = resetScenarioStore(window.localStorage, true);
+      setStoreState(reset);
+      setStoreMessage(reset.kind === "ready" ? "Saved collection reset. Current planner inputs were preserved." : reset.message);
+      setStoreMessageKind(reset.kind === "ready" ? "success" : "error");
+    } catch (cause) {
+      setStoreMessage(cause instanceof Error ? cause.message : "The collection was not reset.");
+      setStoreMessageKind("error");
+    }
   }
 
   async function runCalculation() {
@@ -157,6 +245,7 @@ export default function Home() {
       setResult(response);
       setResultInputs(snapshot);
       setResultRevision(request.revision);
+      setHasUnsavedWork(true);
       setCalculationState({ kind: "success", message: "Calculation complete." });
     } catch (cause) {
       if (activeRequest.current !== request || revision.current !== request.revision) return;
@@ -224,6 +313,32 @@ export default function Home() {
       <span className="sample-tag">DEMO DATA</span>
     </div>
 
+    <section className="scenario-panel" aria-labelledby="saved-scenarios-heading">
+      <div className="scenario-panel-heading">
+        <div><p className="eyebrow">This browser only</p><h2 id="saved-scenarios-heading">Saved scenarios</h2></div>
+        {storeState.kind === "ready" && <span className="scenario-count">{storeState.scenarios.length}{storeState.unreadableCount ? ` readable + ${storeState.unreadableCount} unreadable` : ""} / 20 entries</span>}
+      </div>
+      <p className="scenario-storage-copy">Save explicitly to this browser and website address. Nothing syncs to another device or saves automatically.</p>
+      {storeState.kind === "ready" ? <>
+        <div className="scenario-save-row">
+          <div className="field scenario-name-field"><label htmlFor="scenario-name">Scenario name<span className="unit">1–50 characters</span></label>
+            <input id="scenario-name" type="text" maxLength={50} value={scenarioName} onChange={(event) => setScenarioName(event.target.value)} placeholder="e.g. Reduced orange supply" />
+          </div>
+          <button type="button" className="save-button" onClick={saveCurrentScenario} disabled={hasErrors || storeState.unreadableCount > 0 || storeState.scenarios.length >= 20}>Save current scenario</button>
+        </div>
+        {hasErrors && <p className="store-help">Fix the highlighted fields before saving. Incomplete input drafts are not stored.</p>}
+        {storeState.unreadableCount > 0 && <div className="store-warning" role="status"><span>{storeState.unreadableCount} unreadable record(s) are preserved. Saving is blocked to protect stored data.</span><button type="button" className="recovery-button" onClick={recoverSavedCollection}>Reset saved collection…</button></div>}
+        {storeState.scenarios.length === 0 ? <p className="empty-scenarios">No saved scenarios in this browser yet.</p> : <ul className="saved-scenario-list">{storeState.scenarios.map((scenario) => <li key={scenario.id}>
+          <div><strong>{scenario.name}</strong><small>{scenario.result && !scenario.result_outdated ? "Current result saved" : scenario.result_outdated ? "Inputs saved · result needs recalculation" : "Inputs saved · no current result"} · Saved {new Date(scenario.updated_at).toLocaleString()}</small></div>
+          <button type="button" className="open-scenario-button" onClick={() => openSavedScenario(scenario.id)}>Open</button>
+        </li>)}</ul>}
+        {storeState.scenarios.length >= 20 && <p className="store-help">The collection limit is 20 scenarios. Saved items are not removed automatically.</p>}
+      </> : <div className="store-warning" role="status"><span>{storeState.message}</span>
+        {storeState.kind === "unavailable" ? <button type="button" className="recovery-button" onClick={refreshStoredScenarios}>Retry storage</button> : <button type="button" className="recovery-button" onClick={recoverSavedCollection}>Reset saved collection…</button>}
+      </div>}
+      {storeMessage && <p className={`store-message store-message-${storeMessageKind}`} role={storeMessageKind === "error" ? "alert" : "status"}>{storeMessage}{storeMessageKind === "error" && <button type="button" className="recovery-button" onClick={saveCurrentScenario}>Retry save</button>}</p>}
+    </section>
+
     <div className="workspace-grid">
       <form className="planner-form" onSubmit={handleSubmit} noValidate>
         <div className="section-heading">
@@ -253,7 +368,7 @@ export default function Home() {
               value={inputs.processing_capacity_hours}
               hint="Shared across all blends"
               error={fieldError("processing_capacity_hours")}
-              onChange={(value) => { invalidateActiveRequest(); setInputs((current) => ({ ...current, processing_capacity_hours: value })); }}
+      onChange={(value) => { invalidateActiveRequest(); setHasUnsavedWork(true); setInputs((current) => ({ ...current, processing_capacity_hours: value })); }}
             />
           </div>
         </section>
