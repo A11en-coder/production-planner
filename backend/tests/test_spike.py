@@ -45,8 +45,13 @@ def test_every_shortage_is_returned_without_plan():
     assert result["status"] == "infeasible"
     assert "production_litres" not in result
     assert "profit_contribution_aud" not in result
-    assert {row["resource_id"]: row["required"] for row in result["shortages"]} == {
-        "orange": 9, "apple": 12, "pineapple": 9, "processing": 70}
+    assert {row["resource_id"]: (row["unit"], row["required"], row["available"], row["shortfall"])
+            for row in result["shortages"]} == {
+        "orange": ("litres", 9, 1, 8),
+        "apple": ("litres", 12, 1, 11),
+        "pineapple": ("litres", 9, 1, 8),
+        "processing": ("minutes", 70, 0, 70),
+    }
 
 
 def test_invalid_fields_are_rejected():
