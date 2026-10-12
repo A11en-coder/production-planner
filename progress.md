@@ -6,11 +6,11 @@ Last updated: 12 October 2026 (Australia/Sydney)
 
 - Product scope: [PRD v1.0](docs/Production_Planner_PRD.md), 11 October 2026, FR01–FR14 and NFR01–NFR09. The PRD prints “First draft for review”; [TRD v1.0](docs/Production_Planner_TRD.md#3-source-and-scope) records Allen's explicit approval of that scope.
 - Technical design: [TRD v1.0](docs/Production_Planner_TRD.md), 11 October 2026, approved. Its architecture and release gates are specifications, not completed implementation evidence.
-- Overall state: **Capabilities 1.1, 1.2, 2.1–2.4, and 3.1–3.2 implemented, verified, approved, and committed**. Capability 3.3 is queued for approval.
-- Current phase: **Phase 3 — public planner interface**. Last completed capability: **3.2 calculation controller and freshness**. Next capability: **3.3 results and explanation**, queued for approval.
+- Overall state: **Capabilities 1.1, 1.2, 2.1–2.4, and 3.1–3.3 implemented, verified, approved, and committed**. Capability 4.1 is queued for approval.
+- Current phase: **Phase 3 — public planner interface**. Last completed capability: **3.3 results and explanation**. Next capability: **4.1 versioned local collection and recovery**, queued for approval.
 - Calendar start date: **not assigned**. The TRD's weeks are relative; do not infer a calendar deadline.
 - Budget: **180 planned hours**, 12 relative weeks × 15 hours. Capability 1.1 used approximately **1.1 wall-clock hours**, including its intentional 30-minute idle measurement; hands-on time was not separately clocked.
-- Last approved capability: **3.2 calculation controller and freshness**, explicitly approved 12 October 2026. Capability checkpoint: `daa2d43`.
+- Last approved capability: **3.3 results and explanation**, explicitly approved 12 October 2026. Capability checkpoint: `926c38c`.
 
 ## Working rules for this tracker
 
@@ -38,7 +38,7 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 
 - [x] **3.1 Sample dashboard and editable inputs.** Replaced the single-field harness with the dark dashboard, fictional preloaded fixture, model guide, responsive form, labels/units, client validation, and fixed three-blend inputs. No automatic save or calculation request wiring. Dependency: stable contract/API. Evidence: frontend typecheck/build, direct validator runtime cases, and local page HTTP/accessibility-tree inspection passed. **T01/T02/T07; FR01–FR03, FR06, FR14.** Owner approved 12 October 2026. Checkpoint `df26153`.
 - [x] **3.2 Calculation controller and freshness.** Post canonical inputs to the real API, validate response versions/shapes, track input revision and active request ID, discard obsolete responses, handle the ten-second browser deadline, preserve inputs, and provide manual Retry. Dependency: 3.1 and 2.4. Evidence: frontend typecheck/build and local API-module checks for baseline, edited, shortages, canonicalization, malformed response, timeout, and abort. Browser controls were unavailable for automated click/type/freshness-race checks; no frontend test runner is configured. **FR09, FR13, NFR04.** Commit: `daa2d43`.
-- [ ] **3.3 Results and explanation.** Show unrounded-backed quantities, contribution, resource used/remaining, binding/demand flags, tables plus matching simple charts; handle zero, negative, infeasible, and small residual displays without mislabelling a result. Dependency: 3.2. Evidence: T03/T05/T07 and chart accessibility portion of T12. **FR05–FR06, FR12.**
+- [x] **3.3 Results and explanation.** Added optimal production, per-blend contribution, and resource-use tables with matching accessible bar charts; demand/fully-used flags; unrounded precision details; tiny shortage/residual disclosure; zero-capacity and infeasible presentations. Dependency: 3.2. Evidence: frontend typecheck/build, 10 formatter runtime checks (rounding, negative/zero, tiny quantities/contribution/utilization, precision), browser page load/accessibility tree, and `git diff --check`. No frontend test runner; browser result submission automation was unavailable. **FR05–FR06, FR12; T03/T05/T07 and partial T12.** Commit: `926c38c`.
 
 ### Phase 4 — saved scenarios and comparison (weeks 7–8; 30 hours)
 
@@ -125,6 +125,14 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 
 **Completion evidence:** Frontend typecheck/build passed. Local API-module smoke checks against the backend passed for baseline, edited orange availability, and all four shortages; canonicalization, invalid precision, malformed response, timeout error, and abort propagation checks passed. The page loaded and its accessibility tree was inspected, but browser click/type actions were unavailable in the automation surface, so a browser submission/freshness race was not automated. No frontend test runner is configured. `git diff --check` passed. Owner approved on 12 October 2026; implementation checkpoint `daa2d43`.
 
+## Completed capability record: 3.3 results and explanation
+
+**Purpose and outcome:** Present optimizer results with traceable quantities, contribution, resource utilization, and feasibility explanations. The [planner page](frontend/src/app/page.tsx) now renders production/demand, per-blend contribution, resource use/remaining/capacity/status, and infeasible shortage tables, with matching labeled production, contribution, and utilization bar charts. The response is paired with its submitted input snapshot so per-blend contribution remains based on the calculation inputs even after edits.
+
+**Representative path:** The same response values drive tables and charts. Shared [display helpers](frontend/src/lib/display.ts) round only text/bar widths, use half-away-from-zero formatting, normalize negative zero, and make sub-display-precision positive shortages/utilization and signed contributions visible. An expandable table retains JS numeric values as round-trip strings. Zero-capacity resources display “No capacity”; accepted numerical residuals are called out with exact values and within-tolerance wording; infeasible results show required, available, and shortfall values without a plan.
+
+**Completion evidence:** Frontend typecheck and production build passed. Ten focused formatter runtime checks passed for tie rounding, negative zero, tiny positive quantities, positive/negative/tiny contributions, utilization, and raw numeric precision. `git diff --check` passed; local browser page load/accessibility-tree inspection passed. The browser automation surface did not expose result-submission actions, so optimal/infeasible rendered states were not exercised end-to-end in a browser; the repository has no frontend test runner. Next build emitted its existing notice that it ignores a parent `C:\Users\Allen\package-lock.json`. Owner approved on 12 October 2026; implementation checkpoint `926c38c`.
+
 ## Decisions, dependencies, and open risks
 
 | Item | Current record |
@@ -150,5 +158,6 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 | 12 Oct 2026 | Capability 2.4 / complete API contract and safe failures | Owner approved; 77 backend tests pass; optimal/infeasible/error envelopes, versions, transport limits, request IDs, cache headers, CORS, and metadata-only logs verified. Existing API required no production changes. | Not separately tracked | `b175cc6` |
 | 12 Oct 2026 | Capability 3.1 / sample dashboard and editable inputs | Owner approved; frontend typecheck/build pass; validator runtime checks and local HTTP/accessibility-tree inspection pass; full sample form and model guide are present. | Not separately tracked | `df26153` |
 | 12 Oct 2026 | Capability 3.2 / calculation controller and freshness | Owner approved; typecheck/build pass; local API-module baseline, edited, shortage, canonicalization, malformed response, timeout, and abort checks pass. Browser click/type freshness automation unavailable; no frontend test runner is configured. | Not separately tracked | `daa2d43` |
+| 12 Oct 2026 | Capability 3.3 / results and explanation | Owner approved; frontend typecheck/build pass; formatter edge checks, local page/accessibility inspection, and diff check pass. Browser result-submission automation unavailable; no frontend test runner is configured. | Not separately tracked | `926c38c` |
 
 When closing a capability, add its check results, relevant PRD/TRD IDs, approval/decision, actual hours, and Git commit here; then advance the current phase/capability above. Keep failures and unresolved risks visible rather than checking a gate based on intent.
