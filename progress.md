@@ -6,11 +6,11 @@ Last updated: 12 October 2026 (Australia/Sydney)
 
 - Product scope: [PRD v1.0](docs/Production_Planner_PRD.md), 11 October 2026, FR01–FR14 and NFR01–NFR09. The PRD prints “First draft for review”; [TRD v1.0](docs/Production_Planner_TRD.md#3-source-and-scope) records Allen's explicit approval of that scope.
 - Technical design: [TRD v1.0](docs/Production_Planner_TRD.md), 11 October 2026, approved. Its architecture and release gates are specifications, not completed implementation evidence.
-- Overall state: **Capabilities 1.1, 1.2, 2.1–2.4, and 3.1 implemented, verified, approved, and committed**. Capability 3.2 is queued.
-- Current phase: **Phase 3 — public planner interface**. Last completed capability: **3.1 sample dashboard and editable inputs**. Next capability: **3.2 calculation controller and freshness**, queued for approval.
+- Overall state: **Capabilities 1.1, 1.2, 2.1–2.4, and 3.1–3.2 implemented, verified, approved, and committed**. Capability 3.3 is queued for approval.
+- Current phase: **Phase 3 — public planner interface**. Last completed capability: **3.2 calculation controller and freshness**. Next capability: **3.3 results and explanation**, queued for approval.
 - Calendar start date: **not assigned**. The TRD's weeks are relative; do not infer a calendar deadline.
 - Budget: **180 planned hours**, 12 relative weeks × 15 hours. Capability 1.1 used approximately **1.1 wall-clock hours**, including its intentional 30-minute idle measurement; hands-on time was not separately clocked.
-- Last approved capability: **3.1 sample dashboard and editable inputs**, explicitly approved 12 October 2026. Capability checkpoint: `df26153`.
+- Last approved capability: **3.2 calculation controller and freshness**, explicitly approved 12 October 2026. Capability checkpoint: `daa2d43`.
 
 ## Working rules for this tracker
 
@@ -37,7 +37,7 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 ### Phase 3 — public planner interface (weeks 4–6; 45 hours)
 
 - [x] **3.1 Sample dashboard and editable inputs.** Replaced the single-field harness with the dark dashboard, fictional preloaded fixture, model guide, responsive form, labels/units, client validation, and fixed three-blend inputs. No automatic save or calculation request wiring. Dependency: stable contract/API. Evidence: frontend typecheck/build, direct validator runtime cases, and local page HTTP/accessibility-tree inspection passed. **T01/T02/T07; FR01–FR03, FR06, FR14.** Owner approved 12 October 2026. Checkpoint `df26153`.
-- [ ] **3.2 Calculation controller and freshness.** Post canonical inputs to the real API, validate response versions/shapes, track input revision and active request ID, discard obsolete responses, handle the ten-second browser deadline, preserve inputs, and provide manual Retry. Dependency: 3.1 and 2.4. Evidence: T06/T13. **FR09, FR13, NFR04.**
+- [x] **3.2 Calculation controller and freshness.** Post canonical inputs to the real API, validate response versions/shapes, track input revision and active request ID, discard obsolete responses, handle the ten-second browser deadline, preserve inputs, and provide manual Retry. Dependency: 3.1 and 2.4. Evidence: frontend typecheck/build and local API-module checks for baseline, edited, shortages, canonicalization, malformed response, timeout, and abort. Browser controls were unavailable for automated click/type/freshness-race checks; no frontend test runner is configured. **FR09, FR13, NFR04.** Commit: `daa2d43`.
 - [ ] **3.3 Results and explanation.** Show unrounded-backed quantities, contribution, resource used/remaining, binding/demand flags, tables plus matching simple charts; handle zero, negative, infeasible, and small residual displays without mislabelling a result. Dependency: 3.2. Evidence: T03/T05/T07 and chart accessibility portion of T12. **FR05–FR06, FR12.**
 
 ### Phase 4 — saved scenarios and comparison (weeks 7–8; 30 hours)
@@ -117,6 +117,14 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 
 **Completion evidence:** `npm run typecheck` and `npm run build` passed. Direct runtime checks passed for the sample, excess precision, wrong recipe total, excluded ingredient, min/max ordering, and invalid exponent syntax. The local page returned HTTP 200; its browser accessibility tree exposed the loaded sample, all 25 editable numeric fields with labels/units, status copy, and dashboard title. `git diff --check` passed. The repository had no frontend test runner, so no new framework/dependencies were added. Owner approved on 12 October 2026; implementation checkpoint `df26153`.
 
+## Completed capability record: 3.2 calculation controller and freshness
+
+**Purpose and outcome:** Connect the validated planner form to the versioned FastAPI optimizer while preventing stale requests from replacing current results. The [API module](frontend/src/lib/api.ts) canonicalizes validated decimal strings without rounding, sends API/model versions, and validates response envelopes. The [planner page](frontend/src/app/page.tsx) snapshots each submission, tracks input revision and active request identity, aborts obsolete work, enforces a ten-second deadline, preserves inputs and prior results, marks old results outdated after edits, and offers manual retry with safe errors and request IDs.
+
+**Representative path:** A valid submission is converted to canonical strings and posted with `cache: no-store`; the response is applied only if both its active request identity and captured input revision are current. Edits invalidate the active request and mark any displayed result as outdated. A deadline or API/network failure leaves the editable inputs intact and exposes a manual retry action.
+
+**Completion evidence:** Frontend typecheck/build passed. Local API-module smoke checks against the backend passed for baseline, edited orange availability, and all four shortages; canonicalization, invalid precision, malformed response, timeout error, and abort propagation checks passed. The page loaded and its accessibility tree was inspected, but browser click/type actions were unavailable in the automation surface, so a browser submission/freshness race was not automated. No frontend test runner is configured. `git diff --check` passed. Owner approved on 12 October 2026; implementation checkpoint `daa2d43`.
+
 ## Decisions, dependencies, and open risks
 
 | Item | Current record |
@@ -141,5 +149,6 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 | 12 Oct 2026 | Capability 2.3 / LP construction and solver acceptance | Owner approved; 65 backend tests pass; independent objective/resource certificate, edge cases, status/finite checks, and order/resource tolerance boundaries verified. Existing optimizer required no production changes. | Not separately tracked | `7a6d9a5` |
 | 12 Oct 2026 | Capability 2.4 / complete API contract and safe failures | Owner approved; 77 backend tests pass; optimal/infeasible/error envelopes, versions, transport limits, request IDs, cache headers, CORS, and metadata-only logs verified. Existing API required no production changes. | Not separately tracked | `b175cc6` |
 | 12 Oct 2026 | Capability 3.1 / sample dashboard and editable inputs | Owner approved; frontend typecheck/build pass; validator runtime checks and local HTTP/accessibility-tree inspection pass; full sample form and model guide are present. | Not separately tracked | `df26153` |
+| 12 Oct 2026 | Capability 3.2 / calculation controller and freshness | Owner approved; typecheck/build pass; local API-module baseline, edited, shortage, canonicalization, malformed response, timeout, and abort checks pass. Browser click/type freshness automation unavailable; no frontend test runner is configured. | Not separately tracked | `daa2d43` |
 
 When closing a capability, add its check results, relevant PRD/TRD IDs, approval/decision, actual hours, and Git commit here; then advance the current phase/capability above. Keep failures and unresolved risks visible rather than checking a gate based on intent.
