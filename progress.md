@@ -6,11 +6,11 @@ Last updated: 12 October 2026 (Australia/Sydney)
 
 - Product scope: [PRD v1.0](docs/Production_Planner_PRD.md), 11 October 2026, FR01–FR14 and NFR01–NFR09. The PRD prints “First draft for review”; [TRD v1.0](docs/Production_Planner_TRD.md#3-source-and-scope) records Allen's explicit approval of that scope.
 - Technical design: [TRD v1.0](docs/Production_Planner_TRD.md), 11 October 2026, approved. Its architecture and release gates are specifications, not completed implementation evidence.
-- Overall state: **Capabilities 1.1, 1.2, 2.1–2.4, 3.1–3.3, and 4.1–4.3 implemented, verified, approved, and committed**.
-- Current phase: **Phase 4 — saved scenarios and comparison**. Last completed capability: **4.3 saved comparison**. Next capability: **5.1 automated cross-layer checks**, pending approval.
+- Overall state: **Capabilities 1.1, 1.2, 2.1–2.4, 3.1–3.3, 4.1–4.3, and 5.1 implemented, verified, approved, and committed**.
+- Current phase: **Phase 5 — system verification**. Last completed capability: **5.1 automated cross-layer checks**. Next capability: **5.2 accessibility and browser matrix**, pending approval.
 - Calendar start date: **not assigned**. The TRD's weeks are relative; do not infer a calendar deadline.
 - Budget: **180 planned hours**, 12 relative weeks × 15 hours. Capability 1.1 used approximately **1.1 wall-clock hours**, including its intentional 30-minute idle measurement; hands-on time was not separately clocked.
-- Last approved capability: **4.3 saved comparison**, explicitly approved 12 October 2026. Implementation checkpoint: `caebbc7`; progress checkpoint recorded below.
+- Last approved capability: **5.1 automated cross-layer checks**, explicitly approved complete on 12 October 2026. Implementation checkpoint: `6d28b0e`; progress checkpoint recorded below.
 
 ## Working rules for this tracker
 
@@ -48,7 +48,7 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 
 ### Phase 5 — system verification (weeks 9–10; 30 hours)
 
-- [ ] **5.1 Automated cross-layer checks.** Run pytest, frontend lint/type/build, Vitest/React Testing Library, contract fixtures, and Playwright local integration in GitHub Actions using pinned dependencies. Cover failure preservation and all PRD flows. Dependency: Phases 2–4. Evidence: T01–T13 and **G02/G03** results. **NFR08.**
+- [x] **5.1 Automated cross-layer checks.** Added pinned frontend test/lint tooling, focused Vitest/React Testing Library coverage, Chromium Playwright core-workflow checks, and a GitHub Actions workflow for backend and frontend verification. Unit coverage includes validation, API envelopes/errors, saved collection management and conflicts, comparison eligibility/deltas, and preserving inputs/retrying after failures. Evidence: 19 frontend unit tests and 77 backend tests pass; lint, typecheck, production build, two Playwright tests, and `git diff --check` pass. `npm ci` succeeds. Production dependency audit reports zero vulnerabilities; full audit reports five high findings in a development-only ESLint transitive dependency chain (`braces`, GHSA-vfj7-8cjw-p6xm; no patched version reported). The workflow was authored but not run on GitHub. Dependency: Phases 2–4. **NFR08.** Implementation commit: `6d28b0e`.
 - [ ] **5.2 Accessibility and browser matrix.** Verify Chromium, Firefox, and WebKit at 360/768/1280 widths, keyboard/focus/field errors/status/contrast/zoom/reflow and chart-equivalent tables. Record actual real-device coverage separately. Dependency: complete UI. Evidence: T12. **FR14, NFR07.**
 - [ ] **5.3 Public safeguards, speed, and first-time use.** Check exact CORS and public previews, body/schema/solver limits, deployed 30 POST/IP/60-second WAF rule, secrets/logging, and free-plan usage. Record browser click-to-render T14 measurements (20 individual, three batches of five concurrent, three first-after-inactivity) and time a first-time reviewer through the full flow at ≤2 minutes. Dependency: complete paired preview. Evidence: T14–T16 and **G04/G05**. **NFR01–NFR02, NFR05–NFR06, NFR09.**
 
@@ -157,12 +157,21 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 
 **Completion evidence:** `npm run typecheck`, `npm run build`, and `git diff --check` passed. Focused runtime checks confirmed all 25 input metrics and 8 result metrics, eligibility rejection cases, identical-pair rejection, and PRD T11 fixture deltas. A local browser-to-FastAPI run calculated and saved the baseline and edited-orange scenario, then verified comparison values, charts, accessible exact values, and visibility for near-zero differences; temporary saved scenarios were deleted afterward. No frontend test runner is configured. T12 is partial: accessibility-tree/browser inspection and responsive CSS were checked; the full 360/768/1280 viewport and Chromium/Firefox/WebKit matrix remains Capability 5.2. The Next build emitted its existing notice about ignoring the parent `C:\Users\Allen\package-lock.json`. Owner approved completion on 12 October 2026; implementation checkpoint `caebbc7`.
 
+## Completed capability record: 5.1 automated cross-layer checks
+
+**Purpose and outcome:** Make the existing frontend/backend workflow repeatable locally and in CI. Added exact frontend test and lint dependencies, Vitest/React Testing Library configuration, a Chromium Playwright setup, and a GitHub Actions workflow that installs dependencies, runs backend/frontend checks, builds the app, and exercises the local browser-to-API flow. Fixed the lock-support capability check to use `useSyncExternalStore`, which also avoids setting state synchronously from an effect.
+
+**Test coverage:** Frontend unit tests cover input validation, decimal canonicalization and API errors/aborts, scenario storage/versioning/recovery/mutations/conflicts, comparison eligibility and metrics, plus page-level failure preservation and retry. Playwright drives the running UI and API through calculate, save, compare, reload/open, rename, update, delete, and retry after a simulated API failure. The workflow also runs the 77-test backend suite.
+
+**Completion evidence:** `npm ci`, `npm run lint`, `npm run typecheck`, `npm test` (5 files, 19 tests), `npm run build`, backend pytest (77 passed), two Chromium Playwright tests, production dependency audit (`npm audit --omit=dev --audit-level=high`: zero vulnerabilities), and `git diff --check` passed. Vitest runtime was reduced from approximately 43 seconds to 2.65 seconds by using the Node environment by default and JSDOM only for the page test. Full dependency audit still reports five high development-only findings in the ESLint transitive dependency chain involving `braces` (GHSA-vfj7-8cjw-p6xm); the advisory reports no patched version. The workflow has not yet run on GitHub. The existing Next build notice about the parent `C:\Users\Allen\package-lock.json` remains. Owner approved completion 12 October 2026; implementation checkpoint `6d28b0e`.
+
 ## Decisions, dependencies, and open risks
 
 | Item | Current record |
 | --- | --- |
 | Architecture | Approved ADR01–ADR08 in [TRD §19](docs/Production_Planner_TRD.md#19-risks-and-decisions): separate Next.js/FastAPI projects, SciPy HiGHS, browser-local versioned collection, conditional two-project Vercel Hobby hosting, numeric/failure policies, manual release, and verification matrix. |
 | Hosting feasibility | **G01 passed.** Hobby account and displayed usage were confirmed; the SciPy API deployed and all final-pair browser timings were under five seconds. Exact uncompressed bundle size is unavailable. One earlier browser `Failed to fetch` did not recur in the final eight accepted calls; its cause remains unknown and must stay visible in later T13/T14 evidence. |
+| Frontend development dependencies | Production audit is clean. Full npm audit reports five high findings in a development-only ESLint transitive dependency chain involving `braces` (GHSA-vfj7-8cjw-p6xm); the advisory currently reports no patched version. Recheck during later dependency maintenance. |
 | Repository and calendar | Public repository URL and calendar start date are not recorded. Local commits establish implementation checkpoints; publish URL only when the repository is actually published. |
 | Package versions and devices | Exact tested versions and real-device availability remain to be recorded during implementation. |
 | Scope boundary | Three blends, three ingredients, one day, continuous litres, no waste, free services; no accounts, cloud storage, arbitrary products, integer bottles, exports, or other excluded extensions. |
@@ -186,5 +195,6 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 | 12 Oct 2026 | Capability 4.1 / versioned local collection and recovery | Owner approved; frontend typecheck/build and diff check pass; memory-storage checks cover save/reopen, snapshots/model compatibility, corruption recovery, failures, and 20-entry cap. Browser control automation unavailable; no frontend test runner is configured. | Not separately tracked | `cf7a603` |
 | 12 Oct 2026 | Capability 4.2 / explicit management and concurrent writes | Owner approved; frontend typecheck/build and diff check pass; memory-store and browser checks cover scenario management, capacity, stale revision, unavailable locks, cross-tab list refresh, and preserving current inputs. No frontend test runner is configured. | Not separately tracked | `946a55b` |
 | 12 Oct 2026 | Capability 4.3 / saved comparison | Owner approved; typecheck/build and diff check pass; runtime eligibility/metric checks and local browser-to-API comparison of baseline and edited-orange scenarios pass. PRD T11 fixture verified; T12 remains partial pending full browser/viewport matrix. No frontend test runner is configured. | Not separately tracked | `caebbc7` |
+| 12 Oct 2026 | Capability 5.1 / automated cross-layer checks | Owner approved; npm ci, lint, typecheck, 19 frontend unit tests, production build, 77 backend tests, two Chromium Playwright tests, production dependency audit, and diff check pass. GitHub workflow authored, not run remotely. Full audit has five high dev-only transitive dependency findings; see completed capability record. | Not separately tracked | `6d28b0e` |
 
 When closing a capability, add its check results, relevant PRD/TRD IDs, approval/decision, actual hours, and Git commit here; then advance the current phase/capability above. Keep failures and unresolved risks visible rather than checking a gate based on intent.
