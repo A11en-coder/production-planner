@@ -92,6 +92,37 @@ h1 span { color: var(--mint); }
 .store-message-error { border-color: #e48c7d55; background: #e48c7d0d; color: #f0b1a3; }
 .recovery-button { flex: 0 0 auto; padding: 5px 8px; border: 1px solid currentColor; border-radius: 6px; background: transparent; color: inherit; font-size: 9px; font-weight: 700; cursor: pointer; }
 .recovery-button:focus-visible, .save-button:focus-visible, .open-scenario-button:focus-visible, .manage-scenario-button:focus-visible, .delete-scenario-button:focus-visible { outline: 2px solid #d6ffe1; outline-offset: 2px; }
+.scenario-comparison { margin-top: 16px; padding-top: 15px; border-top: 1px solid #ffffff19; }
+.comparison-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.comparison-heading h3 { margin: 0; color: #e4ece2; font: 600 13px "Manrope", sans-serif; }
+.comparison-heading p { margin: 0; color: #9eaca1; font-size: 9px; line-height: 1.5; }
+.comparison-selects { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.comparison-selects select { width: 100%; min-width: 0; height: 38px; padding: 0 9px; border: 1px solid #3a4b43; border-radius: 7px; background: #111a17; color: #e4ece2; font: 500 11px Inter, ui-sans-serif, system-ui, sans-serif; }
+.comparison-selects select:focus-visible { outline: 2px solid #d6ffe1; outline-offset: 2px; }
+.comparison-unavailable { margin: 12px 0 0; padding: 10px; border: 1px solid #d8a56e40; border-radius: 7px; background: #d8a56e0a; color: #d7bf98; font-size: 10px; line-height: 1.5; }
+.comparison-tables { display: grid; gap: 13px; margin-top: 13px; }
+.comparison-table { min-width: 620px; }
+.comparison-table tbody th { min-width: 175px; white-space: normal; }
+.comparison-table th:nth-child(2), .comparison-table td:nth-child(2) { color: #9eaca1; }
+.comparison-table tbody td:last-child { font-weight: 700; }
+.comparison-positive { color: #b5edc9 !important; }
+.comparison-negative { color: #f0ae99 !important; }
+.comparison-charts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin-top: 10px; }
+.comparison-chart { min-width: 0; padding: 11px; border: 1px solid #ffffff13; border-radius: 8px; background: #10181566; }
+.comparison-chart h4 { margin: 0 0 7px; color: #d8e1d8; font: 600 10px "Manrope", sans-serif; }
+.comparison-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 9px; color: #9eaca1; font-size: 8px; }
+.comparison-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.comparison-swatch { width: 8px; height: 8px; border-radius: 50%; }
+.swatch-a { background: #80b894; }
+.swatch-b { background: #d99a62; }
+.comparison-chart-row { display: grid; gap: 5px; margin-top: 9px; color: #c3cec5; font-size: 8px; }
+.comparison-chart-label { overflow-wrap: anywhere; }
+.comparison-bars { display: grid; gap: 4px; }
+.comparison-bars .bar-track { height: 6px; }
+.comparison-fill-a { background: linear-gradient(90deg, #628d70, #9ed0a6); }
+.comparison-fill-b { background: linear-gradient(90deg, #b97447, #e6b574); }
+.comparison-fill-negative { background: linear-gradient(90deg, #9c584d, #dc8a75); }
+.comparison-chart-values { color: #9eaca1; font-variant-numeric: tabular-nums; line-height: 1.4; }
 
 .workspace-grid { display: grid; grid-template-columns: minmax(0, 1fr) 274px; align-items: start; gap: 24px; }
 .planner-form { min-width: 0; }
@@ -244,6 +275,8 @@ h1 span { color: var(--mint); }
   .sidebar { position: static; grid-template-columns: minmax(0, 1fr); margin-top: 7px; }
   .guide-card { padding: 17px; }
   .guide-card h2 br { display: none; }
+  .comparison-heading { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .comparison-charts { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 440px) {
@@ -264,6 +297,7 @@ h1 span { color: var(--mint); }
   .field input { height: 37px; padding: 0 8px; font-size: 12px; }
   .form-actions { align-items: stretch; flex-direction: column; }
   .scenario-save-row { align-items: stretch; flex-direction: column; }
+  .comparison-selects { grid-template-columns: 1fr; }
   .save-button { min-height: 42px; }
   .store-warning, .store-message { align-items: flex-start; flex-direction: column; }
   .saved-scenario-list li { align-items: flex-start; flex-direction: column; }

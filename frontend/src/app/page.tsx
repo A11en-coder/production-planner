@@ -13,7 +13,8 @@ import {
 } from "@/lib/planner";
 import { validateInputs } from "@/lib/validation";
 import { API_VERSION, MODEL_VERSION, ApiRequestError, CALCULATION_DEADLINE_MS, calculate, type CalculationResult } from "@/lib/api";
-import { formatContribution, formatPercent, formatPrecision, formatQuantity } from "@/lib/display";
+import { formatContribution, formatDisplayNumber, formatPercent, formatPrecision, formatQuantity } from "@/lib/display";
+import { buildInputComparison, buildResultComparison, getComparisonEligibility, type ComparisonMetric, type ComparisonUnit } from "@/lib/comparison";
 import {
   readScenarioStore,
   resetScenarioStore,
@@ -43,6 +44,65 @@ type PendingScenarioAction =
   | { kind: "update"; id: string; name: string }
   | { kind: "delete"; id: string; name: string }
   | { kind: "rename"; id: string; name: string; proposedName: string };
+
+function formatComparisonValue(value: number, unit: ComparisonUnit): string {
+  if (unit === "AUD") return formatContribution(value);
+  if (unit === "%") {
+    if (value < 0 && Math.abs(value) < 0.005) return "−<0.01%";
+    return formatPercent(value);
+  }
+  if (unit === "L" || unit === "min") {
+    if (value !== 0 && Math.abs(value) < 0.0005) return `${value < 0 ? "−" : ""}<0.001 ${unit}`;
+    return formatQuantity(value, unit);
+  }
+  const digits = unit === "AUD/L" ? 2 : 3;
+  const threshold = 0.5 * 10 ** -digits;
+  if (value !== 0 && Math.abs(value) < threshold) return `${value < 0 ? "−" : ""}<${digits === 2 ? "0.01" : "0.001"} ${unit}`;
+  return `${formatDisplayNumber(value, digits)} ${unit}`;
+}
+
+function formatComparisonDelta(value: number, unit: ComparisonUnit): string {
+  if (unit === "AUD") return `AUD ${formatDisplayNumber(value, 2)}`;
+  if (unit === "%") return `${formatDisplayNumber(value, 2)}%`;
+  const digits = unit === "AUD/L" ? 2 : 3;
+  return `${formatDisplayNumber(value, digits)} ${unit}`;
+}
+
+function ComparisonTable({ caption, aName, bName, rows }: { caption: string; aName: string; bName: string; rows: ComparisonMetric[] }) {
+  return <div className="table-scroll"><table className="result-table comparison-table">
+    <caption>{caption}</caption>
+    <thead><tr><th scope="col">Measure</th><th scope="col">Unit</th><th scope="col">Scenario A · {aName}</th><th scope="col">Scenario B · {bName}</th><th scope="col">B − A</th></tr></thead>
+    <tbody>{rows.map((row) => {
+      const delta = row.b - row.a;
+      const deltaDisplay = formatComparisonDelta(delta, row.unit);
+      return <tr key={row.key}>
+        <th scope="row">{row.label}</th><td>{row.unit}</td>
+        <td aria-label={`Exact scenario A value: ${formatPrecision(row.a)} ${row.unit}`}>{formatComparisonValue(row.a, row.unit)}</td>
+        <td aria-label={`Exact scenario B value: ${formatPrecision(row.b)} ${row.unit}`}>{formatComparisonValue(row.b, row.unit)}</td>
+        <td className={delta < 0 ? "comparison-negative" : delta > 0 ? "comparison-positive" : undefined}
+          aria-label={`Exact B minus A difference: ${formatPrecision(delta)} ${row.unit}`}>{deltaDisplay}
+          {delta !== 0 && Number(deltaDisplay.replace(/[^0-9.+-]/g, "")) === 0 && <small className="precision-detail">Exact: {formatPrecision(delta)} {row.unit}</small>}</td>
+      </tr>;
+    })}</tbody>
+  </table></div>;
+}
+
+function ComparisonChart({ title, rows }: { title: string; rows: ComparisonMetric[] }) {
+  const maximum = Math.max(...rows.flatMap((row) => [Math.abs(row.a), Math.abs(row.b)]), Number.EPSILON);
+  const description = rows.map((row) => `${row.label}: scenario A ${formatComparisonValue(row.a, row.unit)}, scenario B ${formatComparisonValue(row.b, row.unit)}`).join("; ");
+  return <div className="comparison-chart" role="img" aria-label={`${title}. ${description}`}>
+    <h4>{title}</h4>
+    <div className="comparison-legend"><span><i className="comparison-swatch swatch-a" />Scenario A</span><span><i className="comparison-swatch swatch-b" />Scenario B</span></div>
+    {rows.map((row) => <div className="comparison-chart-row" key={row.key}>
+      <span className="comparison-chart-label">{row.label}</span>
+      <div className="comparison-bars" aria-hidden="true">
+        <div className="bar-track"><div className={`bar-fill comparison-fill-a${row.a < 0 ? " comparison-fill-negative" : ""}`} style={{ width: `${Math.abs(row.a) / maximum * 100}%` }} /></div>
+        <div className="bar-track"><div className={`bar-fill comparison-fill-b${row.b < 0 ? " comparison-fill-negative" : ""}`} style={{ width: `${Math.abs(row.b) / maximum * 100}%` }} /></div>
+      </div>
+      <span className="comparison-chart-values">A {formatComparisonValue(row.a, row.unit)} · B {formatComparisonValue(row.b, row.unit)}</span>
+    </div>)}
+  </div>;
+}
 
 function Field({ id, label, value, inputMode = "decimal", unit, hint, error, onChange }: FieldProps) {
   const hintId = `${id}-hint`;
@@ -90,6 +150,8 @@ export default function Home() {
   const [pendingScenarioAction, setPendingScenarioAction] = useState<PendingScenarioAction | null>(null);
   const [pendingOpenScenarioId, setPendingOpenScenarioId] = useState<string | null>(null);
   const [pendingCollectionReset, setPendingCollectionReset] = useState(false);
+  const [comparisonAId, setComparisonAId] = useState<string | null>(null);
+  const [comparisonBId, setComparisonBId] = useState<string | null>(null);
   const revision = useRef(0);
   const activeRequest = useRef<{
     revision: number;
@@ -100,6 +162,19 @@ export default function Home() {
   const errors = useMemo(() => validateInputs(inputs), [inputs]);
   const hasErrors = Object.keys(errors).length > 0;
   const resultIsOutdated = result !== null && resultRevision !== revision.current;
+  const comparisonOptions = storeState.kind === "ready"
+    ? storeState.scenarios.map((scenario) => ({ scenario, eligibility: getComparisonEligibility(scenario) }))
+    : [];
+  const eligibleComparisonOptions = comparisonOptions.filter((option) => option.eligibility.eligible);
+  const comparisonA = eligibleComparisonOptions.find((option) => option.scenario.id === comparisonAId) ?? eligibleComparisonOptions[0];
+  const comparisonB = eligibleComparisonOptions.find((option) => option.scenario.id === comparisonBId && option.scenario.id !== comparisonA?.scenario.id)
+    ?? eligibleComparisonOptions.find((option) => option.scenario.id !== comparisonA?.scenario.id);
+  const inputComparison = comparisonA && comparisonB
+    ? buildInputComparison(comparisonA.scenario.inputs, comparisonB.scenario.inputs)
+    : null;
+  const resultComparison = comparisonA && comparisonB
+    ? buildResultComparison(comparisonA.scenario, comparisonB.scenario)
+    : null;
 
   useEffect(() => {
     setSupportsScenarioLocks(typeof navigator.locks !== "undefined");
@@ -474,6 +549,48 @@ export default function Home() {
           </div>}
         </li>)}</ul>}
         {storeState.scenarios.length >= 20 && <p className="store-help">The collection limit is 20 scenarios. Saved items are not removed automatically.</p>}
+        {storeState.scenarios.length > 0 && <section className="scenario-comparison" aria-labelledby="scenario-comparison-heading">
+          <div className="comparison-heading"><h3 id="scenario-comparison-heading">Compare saved scenarios</h3><p>Choose two current optimal results. Differences are calculated as scenario B minus scenario A.</p></div>
+          <div className="comparison-selects">
+            <div className="field"><label htmlFor="compare-scenario-a">Scenario A</label>
+              <select id="compare-scenario-a" value={comparisonA?.scenario.id ?? ""} onChange={(event) => {
+                const nextId = event.target.value;
+                setComparisonAId(nextId || null);
+                if (comparisonB?.scenario.id === nextId) setComparisonBId(eligibleComparisonOptions.find((option) => option.scenario.id !== nextId)?.scenario.id ?? null);
+              }}>
+                <option value="">Select scenario A</option>
+                {comparisonOptions.map(({ scenario, eligibility }) => <option key={scenario.id} value={scenario.id} disabled={!eligibility.eligible || scenario.id === comparisonB?.scenario.id}>
+                  {scenario.name} — {eligibility.eligible ? "Ready to compare" : eligibility.reason}
+                </option>)}
+              </select>
+            </div>
+            <div className="field"><label htmlFor="compare-scenario-b">Scenario B</label>
+              <select id="compare-scenario-b" value={comparisonB?.scenario.id ?? ""} onChange={(event) => {
+                const nextId = event.target.value;
+                setComparisonBId(nextId || null);
+                if (comparisonA?.scenario.id === nextId) setComparisonAId(eligibleComparisonOptions.find((option) => option.scenario.id !== nextId)?.scenario.id ?? null);
+              }}>
+                <option value="">Select scenario B</option>
+                {comparisonOptions.map(({ scenario, eligibility }) => <option key={scenario.id} value={scenario.id} disabled={!eligibility.eligible || scenario.id === comparisonA?.scenario.id}>
+                  {scenario.name} — {eligibility.eligible ? "Ready to compare" : eligibility.reason}
+                </option>)}
+              </select>
+            </div>
+          </div>
+          {eligibleComparisonOptions.length < 2
+            ? <p className="comparison-unavailable" role="status">Save two distinct scenarios with current optimal results to compare them. Drafts, infeasible results, outdated snapshots, and prior model versions need attention first.</p>
+            : comparisonA && comparisonB && inputComparison && resultComparison && <>
+              <div className="comparison-tables">
+                <ComparisonTable caption="Saved planner inputs" aName={comparisonA.scenario.name} bName={comparisonB.scenario.name} rows={inputComparison} />
+                <ComparisonTable caption="Optimal production and resource use" aName={comparisonA.scenario.name} bName={comparisonB.scenario.name} rows={resultComparison} />
+              </div>
+              <div className="comparison-charts">
+                <ComparisonChart title="Recommended production" rows={resultComparison.filter((row) => row.key.startsWith("production-"))} />
+                <ComparisonChart title="Resource use" rows={resultComparison.filter((row) => row.key.startsWith("used-"))} />
+                <ComparisonChart title="Total contribution" rows={resultComparison.filter((row) => row.key === "total-contribution")} />
+              </div>
+            </>}
+        </section>}
       </> : <div className="store-warning" role="status"><span>{storeState.message}</span>
         {storeState.kind === "unavailable" ? <button type="button" className="recovery-button" onClick={refreshStoredScenarios}>Retry storage</button> : <button type="button" className="recovery-button" onClick={requestCollectionReset}>Reset saved collection…</button>}
       </div>}
