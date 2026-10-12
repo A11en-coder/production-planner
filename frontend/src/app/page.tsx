@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { Fragment, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   BLEND_IDS,
   BLEND_LABELS,
@@ -13,6 +13,7 @@ import {
 } from "@/lib/planner";
 import { validateInputs } from "@/lib/validation";
 import { ApiRequestError, CALCULATION_DEADLINE_MS, calculate, type CalculationResult } from "@/lib/api";
+import { formatContribution, formatPercent, formatPrecision, formatQuantity } from "@/lib/display";
 
 type FieldProps = {
   id: string;
@@ -57,6 +58,7 @@ export default function Home() {
     requestId?: string;
   }>({ kind: "idle" });
   const [result, setResult] = useState<CalculationResult | null>(null);
+  const [resultInputs, setResultInputs] = useState<PlanningInputs | null>(null);
   const [resultRevision, setResultRevision] = useState<number | null>(null);
   const revision = useRef(0);
   const activeRequest = useRef<{
@@ -153,6 +155,7 @@ export default function Home() {
       const response = await calculate(snapshot, controller.signal);
       if (activeRequest.current !== request || revision.current !== request.revision) return;
       setResult(response);
+      setResultInputs(snapshot);
       setResultRevision(request.revision);
       setCalculationState({ kind: "success", message: "Calculation complete." });
     } catch (cause) {
@@ -180,6 +183,13 @@ export default function Home() {
   }
 
   const isPending = calculationState.kind === "pending";
+
+  const resultBlendContributions = result?.status === "optimal" && resultInputs
+    ? Object.fromEntries(BLEND_IDS.map((blendId) => {
+      const blend = resultInputs.blends.find((item) => item.id === blendId)!;
+      return [blendId, Number(blend.profit_aud_per_litre) * result.production_litres[blendId]];
+    })) as Record<BlendId, number>
+    : null;
 
   function blendInput(blendId: BlendId) {
     return inputs.blends.find((blend) => blend.id === blendId)!;
@@ -310,12 +320,78 @@ export default function Home() {
             {resultIsOutdated && <span className="outdated-badge">OUTDATED INPUTS</span>}
           </div>
           {result.status === "optimal" ? <>
-            <div className="result-summary"><span>Contribution</span><strong>AUD {result.profit_contribution_aud.toFixed(2)}</strong></div>
-            <dl className="quantity-list">{BLEND_IDS.map((blendId) => <div key={blendId}><dt>{BLEND_LABELS[blendId]}</dt><dd>{result.production_litres[blendId].toFixed(3)} L</dd></div>)}</dl>
-          </> : <ul className="shortage-list">{result.shortages.map((shortage) => <li key={shortage.resource_id}>
-            <span>{shortage.resource_id === "processing" ? "Processing" : INGREDIENT_LABELS[shortage.resource_id]}</span>
-            <span>Short {shortage.shortfall} {shortage.unit}</span>
-          </li>)}</ul>}
+            <div className="result-summary"><span>Total profit contribution</span><strong>{formatContribution(result.profit_contribution_aud)}</strong></div>
+            <section className="result-block" aria-labelledby="production-results-heading">
+              <h4 id="production-results-heading">Production plan</h4>
+              <div className="table-scroll"><table className="result-table"><caption>Recommended production and demand-limit status</caption><thead><tr><th scope="col">Blend</th><th scope="col">Production</th><th scope="col">Demand limit</th><th scope="col">Contribution</th></tr></thead><tbody>
+                {BLEND_IDS.map((blendId) => <tr key={blendId}>
+                  <th scope="row">{BLEND_LABELS[blendId]}</th>
+                  <td><span>{formatQuantity(result.production_litres[blendId], "L")}</span>{result.production_litres[blendId] > 0 && result.production_litres[blendId] < 0.001 && <small className="precision-detail">Exact: {formatPrecision(result.production_litres[blendId])} L</small>}</td>
+                  <td>{result.reached_demand_caps.includes(blendId) ? <span className="result-flag">At demand cap</span> : "Below demand cap"}</td>
+                  <td className={resultBlendContributions?.[blendId] !== undefined && resultBlendContributions[blendId] < 0 ? "negative-value" : ""}>{resultBlendContributions ? formatContribution(resultBlendContributions[blendId]) : "—"}</td>
+                </tr>)}
+              </tbody></table></div>
+              <div className="chart-card" role="img" aria-label={`Production by blend: ${BLEND_IDS.map((id) => `${BLEND_LABELS[id]} ${formatQuantity(result.production_litres[id], "L")}`).join("; ")}`}>
+                <h5>Production by blend</h5>{BLEND_IDS.map((blendId) => {
+                  const value = result.production_litres[blendId];
+                  const maximum = Math.max(...BLEND_IDS.map((id) => result.production_litres[id]), 0);
+                  const width = maximum > 0 ? value / maximum * 100 : 0;
+                  return <div className="bar-row" key={blendId}><span>{BLEND_LABELS[blendId]}</span><div className="bar-track"><div className="bar-fill production-fill" style={{ width: `${width}%` }} /></div><strong>{formatQuantity(value, "L")}</strong></div>;
+                })}
+              </div>
+            </section>
+            {resultBlendContributions && <section className="result-block" aria-labelledby="contribution-results-heading">
+              <h4 id="contribution-results-heading">Contribution by blend</h4>
+              <div className="table-scroll"><table className="result-table"><caption>Contribution is input rate × returned quantity; rounded rows may not sum exactly to the total.</caption><thead><tr><th scope="col">Blend</th><th scope="col">Contribution</th><th scope="col">Production</th></tr></thead><tbody>
+                {BLEND_IDS.map((blendId) => <tr key={blendId}><th scope="row">{BLEND_LABELS[blendId]}</th><td className={resultBlendContributions[blendId] < 0 ? "negative-value" : ""}>{formatContribution(resultBlendContributions[blendId])}</td><td>{formatQuantity(result.production_litres[blendId], "L")}</td></tr>)}
+              </tbody></table></div>
+              <div className="chart-card" role="img" aria-label={`Contribution by blend: ${BLEND_IDS.map((id) => `${BLEND_LABELS[id]} ${formatContribution(resultBlendContributions[id])}`).join("; ")}`}>
+                <h5>Contribution by blend</h5>{BLEND_IDS.map((blendId) => {
+                  const value = resultBlendContributions[blendId];
+                  const maximum = Math.max(...BLEND_IDS.map((id) => Math.abs(resultBlendContributions[id])), 0);
+                  const width = maximum > 0 ? Math.abs(value) / maximum * 100 : 0;
+                  return <div className="bar-row" key={blendId}><span>{BLEND_LABELS[blendId]}</span><div className="bar-track"><div className={`bar-fill ${value < 0 ? "negative-fill" : "contribution-fill"}`} style={{ width: `${width}%` }} /></div><strong>{formatContribution(value)}</strong></div>;
+                })}
+              </div>
+            </section>}
+            <section className="result-block" aria-labelledby="resource-results-heading">
+              <h4 id="resource-results-heading">Resource use</h4>
+              <div className="table-scroll"><table className="result-table"><caption>Resource use, remaining capacity, and constraint status</caption><thead><tr><th scope="col">Resource</th><th scope="col">Used</th><th scope="col">Available</th><th scope="col">Remaining</th><th scope="col">Utilization</th><th scope="col">Status</th></tr></thead><tbody>
+                {result.resources.map((resource) => {
+                  const unit = resource.unit === "minutes" ? "min" : "L";
+                  const residual = result.numerical_residuals.find((item) => item.constraint === resource.id);
+                  const status = resource.available === 0 ? "No capacity" : resource.is_fully_used ? "Fully used" : "Capacity remains";
+                  return <tr key={resource.id}><th scope="row">{resource.id === "processing" ? "Processing time" : `${INGREDIENT_LABELS[resource.id]} juice`}</th>
+                    <td>{formatQuantity(resource.used, unit)}</td><td>{formatQuantity(resource.available, unit)}</td>
+                    <td>{resource.remaining < 0 && residual ? <><span>Within solver tolerance</span><small className="precision-detail">Excess: {formatPrecision(residual.residual)} {unit}</small></> : formatQuantity(resource.remaining, unit)}</td>
+                    <td>{resource.utilization_percent === null ? "No capacity" : formatPercent(resource.utilization_percent)}</td><td>{resource.available === 0 ? status : resource.is_fully_used ? <span className="result-flag">{status}</span> : status}</td>
+                  </tr>;
+                })}
+              </tbody></table></div>
+              <div className="chart-card" role="img" aria-label={`Resource utilization: ${result.resources.map((resource) => `${resource.id === "processing" ? "Processing" : INGREDIENT_LABELS[resource.id]} ${resource.utilization_percent === null ? "No capacity" : formatPercent(resource.utilization_percent)}`).join("; ")}`}>
+                <h5>Resource utilization</h5>{result.resources.map((resource) => {
+                  const percent = resource.utilization_percent;
+                  const label = resource.id === "processing" ? "Processing" : INGREDIENT_LABELS[resource.id];
+                  return <div className="bar-row" key={resource.id}><span>{label}</span><div className="bar-track">{percent !== null && <div className={`bar-fill ${resource.is_fully_used ? "full-fill" : "resource-fill"}`} style={{ width: `${Math.max(0, Math.min(percent, 100))}%` }} />}</div><strong>{percent === null ? "No capacity" : formatPercent(percent)}</strong></div>;
+                })}
+              </div>
+              <p className="result-footnote">“Fully used” and “At demand cap” identify active limits; more capacity does not guarantee higher contribution.</p>
+              {result.numerical_residuals.length > 0 && <div className="residual-note"><strong>Solver tolerance applied.</strong> Small positive residuals within the accepted 0.000001 tolerance are disclosed here, not treated as exact equality.<ul>{result.numerical_residuals.map((item, index) => <li key={`${item.constraint}-${index}`}>{item.constraint}: {item.residual < 0.001 ? `<0.001 ${item.unit === "litres" ? "L" : "min"}` : formatQuantity(item.residual, item.unit === "litres" ? "L" : "min")} <small>(exact {formatPrecision(item.residual)} {item.unit})</small></li>)}</ul></div>}
+              <details className="precision-details"><summary>Unrounded calculation values</summary><div className="table-scroll"><table className="result-table"><caption>Full numeric values from the optimizer response and submitted input snapshot</caption><thead><tr><th scope="col">Measure</th><th scope="col">Unrounded value</th></tr></thead><tbody>
+                <tr><th scope="row">Total contribution</th><td>{formatPrecision(result.profit_contribution_aud)} AUD</td></tr>
+                {BLEND_IDS.map((blendId) => <Fragment key={blendId}><tr><th scope="row">{BLEND_LABELS[blendId]} production</th><td>{formatPrecision(result.production_litres[blendId])} L</td></tr>{resultBlendContributions && <tr><th scope="row">{BLEND_LABELS[blendId]} contribution</th><td>{formatPrecision(resultBlendContributions[blendId])} AUD</td></tr>}</Fragment>)}
+                {result.resources.map((resource) => <Fragment key={resource.id}><tr><th scope="row">{resource.id} used</th><td>{formatPrecision(resource.used)} {resource.unit}</td></tr><tr><th scope="row">{resource.id} available</th><td>{formatPrecision(resource.available)} {resource.unit}</td></tr><tr><th scope="row">{resource.id} remaining</th><td>{formatPrecision(resource.remaining)} {resource.unit}</td></tr>{resource.utilization_percent !== null && <tr><th scope="row">{resource.id} utilization</th><td>{formatPrecision(resource.utilization_percent)}%</td></tr>}</Fragment>)}
+                {result.numerical_residuals.map((item, index) => <tr key={`${item.constraint}-${index}`}><th scope="row">{item.constraint} residual</th><td>{formatPrecision(item.residual)} {item.unit}</td></tr>)}
+              </tbody></table></div></details>
+            </section>
+          </> : <>
+            <p className="shortage-intro">The minimum orders require more resources than are available. No production plan was returned.</p>
+            <div className="table-scroll"><table className="result-table"><caption>Exact resource shortages for the submitted minimum orders</caption><thead><tr><th scope="col">Resource</th><th scope="col">Required</th><th scope="col">Available</th><th scope="col">Shortfall</th></tr></thead><tbody>{result.shortages.map((shortage) => {
+              const unit = shortage.unit === "minutes" ? "min" : "L";
+              const tiny = shortage.shortfall < 0.001;
+              return <tr key={shortage.resource_id}><th scope="row">{shortage.resource_id === "processing" ? "Processing time" : `${INGREDIENT_LABELS[shortage.resource_id]} juice`}</th><td>{formatQuantity(shortage.required, unit)}</td><td>{formatQuantity(shortage.available, unit)}</td><td className="negative-value">{tiny ? <><span>&lt;0.001 {unit}</span><small className="precision-detail">Exact: {formatPrecision(shortage.shortfall)} {unit}</small></> : formatQuantity(shortage.shortfall, unit)}</td></tr>;
+            })}</tbody></table></div>
+          </>}
           <p className="request-reference">Request {result.request_id} <span>·</span> {result.duration_ms.toFixed(0)} ms</p>
         </section>}
       </form>
