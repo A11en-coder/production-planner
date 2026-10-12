@@ -10,7 +10,7 @@ Last updated: 12 October 2026 (Australia/Sydney)
 - Current phase: **Phase 1 — feasibility and foundations**. Last completed capability: **1.2 repository/API foundations**. Next capability: **2.1 input schema and validation**, queued.
 - Calendar start date: **not assigned**. The TRD's weeks are relative; do not infer a calendar deadline.
 - Budget: **180 planned hours**, 12 relative weeks × 15 hours. Capability 1.1 used approximately **1.1 wall-clock hours**, including its intentional 30-minute idle measurement; hands-on time was not separately clocked.
-- Last approved capability: **1.2 repository/API foundations**, explicitly approved 12 October 2026. Capability checkpoint: `CAPABILITY_1_2_COMMIT`.
+- Last approved capability: **1.2 repository/API foundations**, explicitly approved 12 October 2026. Capability checkpoint: `f3640bb`.
 
 ## Working rules for this tracker
 
@@ -25,7 +25,7 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 ### Phase 1 — feasibility and foundations (week 1; 15 hours)
 
 - [x] **1.1 Hosting/Python API spike — maximum 10 hours.** G01 passed in approximately 1.1 wall-clock hours. The public Hobby preview pair returned the PRD baseline, edited sample, all four exact shortages, safe validation and timeout errors, and exact paired CORS. Final preview click-to-render: 3484.6 ms after ≥30 minutes idle, 581.3 ms warm, 756.2–2844.0 ms in five concurrent sessions, 539.7 ms for the edited sample. Evidence and unresolved risks: [hosting spike record](docs/hosting-spike-evidence.md). Final T14 remains later work. Commit: `a9c44b1`. [TRD §§16, 18](docs/Production_Planner_TRD.md#16-deployment-and-rollout)
-- [x] **1.2 Repository/API foundations.** Added [README.md](README.md) with reproducible local API/web startup and check commands, runtime versus development dependency guidance, project map, model limits, and API/fixture contract notes. Confirmed the existing fixture-driven API foundation without duplicating spike code. Dependency: 1.1 passed. Evidence: 9 backend tests passed; frontend typecheck/build passed; local Uvicorn and Next.js startup plus health, baseline optimize (AUD 219.3333), and frontend HTTP 200 smoke checks passed. No API runtime changes. Relevant design: [TRD §§8, 10](docs/Production_Planner_TRD.md#8-repository-and-configuration); **NFR08**. Owner approved completion 12 October 2026. Commit: `CAPABILITY_1_2_COMMIT`.
+- [x] **1.2 Repository/API foundations.** Added [README.md](README.md) with reproducible local API/web startup and check commands, runtime versus development dependency guidance, project map, model limits, and API/fixture contract notes. Confirmed the existing fixture-driven API foundation without duplicating spike code. Dependency: 1.1 passed. Evidence: 9 backend tests passed; frontend typecheck/build passed; local Uvicorn and Next.js startup plus health, baseline optimize (AUD 219.3333), and frontend HTTP 200 smoke checks passed. No API runtime changes. Relevant design: [TRD §§8, 10](docs/Production_Planner_TRD.md#8-repository-and-configuration); **NFR08**. Owner approved completion 12 October 2026. Commit: `f3640bb`.
 
 ### Phase 2 — trusted optimization API (weeks 2–3; 30 hours)
 
@@ -75,7 +75,7 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 
 **Documented request path:** [frontend `Home.calculate()`](frontend/src/app/page.tsx) posts JSON to [FastAPI `calculate()`](backend/app/main.py), which applies transport/version checks, calls [validation](backend/app/validation.py), and passes valid models to [the optimizer](backend/app/optimizer.py). The UI checks response compatibility before rendering. [The sample fixture](contracts/sample-request.json) is shared with backend tests.
 
-**Completion evidence:** 9 backend tests passed; `npm run typecheck` and `npm run build` passed; local API and Next.js development servers started from the documented commands, `/health` returned ready, the fixture returned an optimal AUD 219.3333 baseline, and the frontend returned HTTP 200. One existing Starlette/AnyIO deprecation warning remains. Owner explicitly approved the walkthrough and completion on 12 October 2026; checkpoint `CAPABILITY_1_2_COMMIT`.
+**Completion evidence:** 9 backend tests passed; `npm run typecheck` and `npm run build` passed; local API and Next.js development servers started from the documented commands, `/health` returned ready, the fixture returned an optimal AUD 219.3333 baseline, and the frontend returned HTTP 200. One existing Starlette/AnyIO deprecation warning remains. Owner explicitly approved the walkthrough and completion on 12 October 2026; checkpoint `f3640bb`.
 
 ## Decisions, dependencies, and open risks
 
@@ -95,6 +95,6 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 | --- | --- | --- | ---: | --- |
 | 12 Oct 2026 | Planning intake | PRD/TRD read; repository inventory found planning documents only. No application checks or deployment claimed. | Not recorded | None |
 | 12 Oct 2026 | Capability 1.1 / G01 | Passed; owner approved; browser/API evidence in [hosting-spike-evidence.md](docs/hosting-spike-evidence.md). Progress tracking recorded in this commit. | ~1.1 elapsed hours (includes 30-min idle wait) | `a9c44b1` |
-| 12 Oct 2026 | Capability 1.2 / repository/API foundations | Owner approved; README setup and contract documentation; 9 backend tests, frontend typecheck/build, and local API/web startup smoke passed. | Not separately tracked | `CAPABILITY_1_2_COMMIT` |
+| 12 Oct 2026 | Capability 1.2 / repository/API foundations | Owner approved; README setup and contract documentation; 9 backend tests, frontend typecheck/build, and local API/web startup smoke passed. | Not separately tracked | `f3640bb` |
 
 When closing a capability, add its check results, relevant PRD/TRD IDs, approval/decision, actual hours, and Git commit here; then advance the current phase/capability above. Keep failures and unresolved risks visible rather than checking a gate based on intent.
