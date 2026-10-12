@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Production Planner feasibility harness",
-  description: "Fictional sample for checking the deployed optimization path.",
+  title: "Production Planner | Daily blend planning",
+  description: "Balance juice blend recipes, ingredient supply and processing time for a production day.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

@@ -1,135 +1,248 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
+import {
+  BLEND_IDS,
+  BLEND_LABELS,
+  INGREDIENT_IDS,
+  INGREDIENT_LABELS,
+  SAMPLE_INPUTS,
+  type BlendId,
+  type IngredientId,
+  type PlanningInputs,
+} from "@/lib/planner";
+import { validateInputs } from "@/lib/validation";
 
-const sample = {
-  api_version: 1,
-  model_version: "juice-day-v1",
-  blends: [
-    { id: "orange_apple", recipe_percent: { orange: "60", apple: "40", pineapple: "0" }, profit_aud_per_litre: "2.00", processing_minutes_per_litre: "2", min_litres: "0", max_litres: "60" },
-    { id: "apple_pineapple", recipe_percent: { orange: "0", apple: "50", pineapple: "50" }, profit_aud_per_litre: "1.80", processing_minutes_per_litre: "2", min_litres: "0", max_litres: "60" },
-    { id: "tropical", recipe_percent: { orange: "30", apple: "30", pineapple: "40" }, profit_aud_per_litre: "2.50", processing_minutes_per_litre: "3", min_litres: "0", max_litres: "60" },
-  ],
-  available_ingredient_litres: { orange: "40", apple: "40", pineapple: "30" },
-  processing_capacity_hours: "4",
+type FieldProps = {
+  id: string;
+  label: string;
+  value: string;
+  inputMode?: "decimal" | "text";
+  unit?: string;
+  hint?: string;
+  error?: string;
+  onChange: (value: string) => void;
 };
 
-type Resource = { id: string; unit: string; available: number; used: number; remaining: number };
-type Optimal = { status: "optimal"; request_id: string; production_litres: Record<string, number>; profit_contribution_aud: number; resources: Resource[]; numerical_residuals: { constraint: string; residual: number; unit: string }[] };
-type Infeasible = { status: "infeasible"; request_id: string; shortages: { resource_id: string; unit: string; required: number; available: number; shortfall: number }[] };
-type Result = Optimal | Infeasible;
+function Field({ id, label, value, inputMode = "decimal", unit, hint, error, onChange }: FieldProps) {
+  const hintId = `${id}-hint`;
+  const errorId = `${id}-error`;
+  const describedBy = [hint ? hintId : null, error ? errorId : null].filter(Boolean).join(" ") || undefined;
 
-function three(value: number) {
-  return Math.abs(value) < 0.0005 ? "0.000" : value.toFixed(3);
+  return <div className="field">
+    <label htmlFor={id}>{label}{unit && <span className="unit">{unit}</span>}</label>
+    <input
+      id={id}
+      type="text"
+      inputMode={inputMode}
+      autoComplete="off"
+      spellCheck={false}
+      value={value}
+      aria-invalid={Boolean(error)}
+      aria-describedby={describedBy}
+      onChange={(event) => onChange(event.target.value)}
+    />
+    {hint && <small id={hintId} className="field-hint">{hint}</small>}
+    {error && <small id={errorId} className="field-error">{error}</small>}
+  </div>;
 }
 
 export default function Home() {
-  const [orange, setOrange] = useState("40");
-  const [result, setResult] = useState<Result | null>(null);
-  const [error, setError] = useState("");
-  const [pending, setPending] = useState(false);
-  const [elapsed, setElapsed] = useState<number | null>(null);
-  const start = useRef<number | null>(null);
-  const controller = useRef<AbortController | null>(null);
-  const revision = useRef(0);
+  const [inputs, setInputs] = useState<PlanningInputs>(() => structuredClone(SAMPLE_INPUTS));
+  const [submitted, setSubmitted] = useState(false);
+  const [notice, setNotice] = useState("");
+  const errors = useMemo(() => validateInputs(inputs), [inputs]);
+  const hasErrors = Object.keys(errors).length > 0;
 
-  useEffect(() => {
-    if (result && start.current !== null) {
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        setElapsed(performance.now() - start.current!);
-        start.current = null;
-      }));
-    }
-  }, [result]);
-
-  async function calculate() {
-    controller.current?.abort();
-    const active = new AbortController();
-    controller.current = active;
-    const requestRevision = revision.current;
-    const timeout = window.setTimeout(() => active.abort(), 10_000);
-    setPending(true);
-    setError("");
-    setResult(null);
-    setElapsed(null);
-    start.current = performance.now();
-    try {
-      const base = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
-      // send the sample data to the API endpoint
-      const response = await fetch(`${base}/api/v1/optimize`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...sample, available_ingredient_litres: { ...sample.available_ingredient_litres, orange } }),
-        signal: active.signal, cache: "no-store",
-      });
-      let data;
-      try {
-        data = await response.json();
-      } catch {
-        throw new Error("The calculation service returned an unreadable response. Retry manually.");
-      }
-      if (!response.ok) throw new Error(data?.error?.message || `Calculation failed (${response.status}).`);
-      if (data.api_version !== 1 || data.model_version !== "juice-day-v1" ||
-          !["optimal", "infeasible"].includes(data.status)) throw new Error("The API returned an incompatible result.");
-      if (data.status === "optimal" &&
-          (!data.production_litres || !Array.isArray(data.resources) ||
-           !Array.isArray(data.numerical_residuals) ||
-           !Number.isFinite(data.profit_contribution_aud))) throw new Error("The API returned an incomplete result.");
-      if (data.status === "infeasible" && !Array.isArray(data.shortages))
-        throw new Error("The API returned an incomplete shortage result.");
-      if (requestRevision !== revision.current || controller.current !== active) return;
-      setResult(data as Result);
-    } catch (cause) {
-      if (requestRevision !== revision.current || controller.current !== active) return;
-      setError(cause instanceof Error && cause.name === "AbortError"
-        ? "Calculation exceeded the 10-second deadline. Retry manually."
-        : cause instanceof TypeError ? "Could not reach the calculation service. Retry manually."
-        : cause instanceof Error ? cause.message : "Calculation is unavailable. Retry manually.");
-      start.current = null;
-    } finally {
-      window.clearTimeout(timeout);
-      if (controller.current === active) setPending(false);
-    }
+  function updateBlend(blendId: BlendId, field: "profit_aud_per_litre" | "processing_minutes_per_litre" | "min_litres" | "max_litres", value: string) {
+    setInputs((current) => ({
+      ...current,
+      blends: current.blends.map((blend) => blend.id === blendId ? { ...blend, [field]: value } : blend),
+    }));
+    setNotice("");
   }
 
-  function changeOrange(value: string) {
-    revision.current += 1;
-    controller.current?.abort();
-    controller.current = null;
-    start.current = null;
-    setOrange(value);
-    setResult(null);
-    setElapsed(null);
-    setError("");
-    setPending(false);
+  function updateRecipe(blendId: BlendId, ingredient: IngredientId, value: string) {
+    setInputs((current) => ({
+      ...current,
+      blends: current.blends.map((blend) => blend.id === blendId
+        ? { ...blend, recipe_percent: { ...blend.recipe_percent, [ingredient]: value } }
+        : blend),
+    }));
+    setNotice("");
   }
 
-  return <main>
-    <h1>Production Planner feasibility harness</h1>
-    <p className="muted">Fictional juice data. This page tests the deployed API path and timing before the full dashboard is built.</p>
-    <section className="card" aria-labelledby="sample-heading">
-      <h2 id="sample-heading">Sample calculation</h2>
-      <p>Orange–apple, apple–pineapple, and tropical blends share ingredients and four hours of processing time. Change orange availability to 30 L to try the comparison fixture.</p>
-      <div className="controls">
-        <label>Orange available (L)<input value={orange} onChange={event => changeOrange(event.target.value)} inputMode="decimal" /></label>
-        <button disabled={pending} onClick={calculate}>{pending ? "Calculating…" : "Optimize"}</button>
+  function updateAvailability(ingredient: IngredientId, value: string) {
+    setInputs((current) => ({
+      ...current,
+      available_ingredient_litres: { ...current.available_ingredient_litres, [ingredient]: value },
+    }));
+    setNotice("");
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitted(true);
+    if (hasErrors) {
+      setNotice("Review the highlighted fields before continuing.");
+      return;
+    }
+    setNotice("Inputs are valid. The calculation service is not connected yet.");
+  }
+
+  function resetSample() {
+    setInputs(structuredClone(SAMPLE_INPUTS));
+    setSubmitted(false);
+    setNotice("");
+  }
+
+  function fieldError(path: string) {
+    return submitted ? errors[path] : undefined;
+  }
+
+  function blendInput(blendId: BlendId) {
+    return inputs.blends.find((blend) => blend.id === blendId)!;
+  }
+
+  return <main className="shell">
+    <header className="topbar">
+      <a className="brand" href="#top" aria-label="Production Planner home">
+        <span className="brand-mark" aria-hidden="true">P</span>
+        <span>Production Planner</span>
+      </a>
+      <span className="topbar-note"><span className="status-dot" />Daily blend planning</span>
+    </header>
+
+    <section className="hero" id="top" aria-labelledby="page-title">
+      <div className="hero-copy">
+        <p className="eyebrow">A clearer way to plan production</p>
+        <h1 id="page-title">Make every litre<br /><span>count.</span></h1>
+        <p className="hero-description">Balance your blend recipes, ingredient supply and production time to find a plan that works for today.</p>
       </div>
-      <p className="muted">Other sample values remain fixed for this spike. No scenario is saved.</p>
+      <div className="hero-art" aria-hidden="true">
+        <div className="orbit orbit-one" /><div className="orbit orbit-two" />
+        <div className="fruit fruit-orange" /><div className="fruit fruit-lime" /><div className="fruit fruit-berry" />
+        <span className="art-leaf leaf-one" /><span className="art-leaf leaf-two" />
+        <div className="art-label"><span>3</span><small>blends<br />in focus</small></div>
+      </div>
     </section>
-    {error && <p className="error" role="alert">{error}</p>}
-    {result && <section className="card" aria-live="polite">
-      <h2>{result.status === "optimal" ? "Optimal sample result" : "Minimum orders exceed resources"}</h2>
-      <p>Request ID: {result.request_id}</p>
-      {elapsed !== null && <p>Click to rendered result: {elapsed.toFixed(1)} ms</p>}
-      {result.status === "optimal" ? <>
-        <p>Total profit contribution: AUD {result.profit_contribution_aud.toFixed(2)}</p>
-        <div className="table-wrap"><table><caption>Recommended production</caption><thead><tr><th>Blend</th><th>Litres</th><th>Relative quantity</th></tr></thead><tbody>
-          {Object.entries(result.production_litres).map(([id, litres]) => <tr key={id}><th>{id.replaceAll("_", "–")}</th><td>{three(litres)}</td><td><div className="bar" style={{ width: `${Math.max(0, litres / 60 * 100)}%` }} /></td></tr>)}
-        </tbody></table></div>
-        <div className="table-wrap"><table><caption>Resource use</caption><thead><tr><th>Resource</th><th>Used</th><th>Available</th><th>Remaining</th></tr></thead><tbody>
-          {result.resources.map(resource => <tr key={resource.id}><th>{resource.id}</th><td>{three(resource.used)} {resource.unit}</td><td>{three(resource.available)} {resource.unit}</td><td>{three(resource.remaining)} {resource.unit}</td></tr>)}
-        </tbody></table></div>
-        {result.numerical_residuals.length > 0 && <p className="muted">Tiny residuals within the solver tolerance: {result.numerical_residuals.map(item => `${item.constraint} ${item.residual} ${item.unit}`).join(", ")}.</p>}
-      </> : <ul>{result.shortages.map(shortage => <li key={shortage.resource_id}>{shortage.resource_id}: need {shortage.required} {shortage.unit}, have {shortage.available}; short {shortage.shortfall}.</li>)}</ul>}
-    </section>}
+
+    <div className="notice-strip" role="note">
+      <span className="notice-icon" aria-hidden="true">i</span>
+      <p><strong>Sample scenario</strong> — Values are fictional and loaded for you to explore. Nothing is saved automatically.</p>
+      <span className="sample-tag">DEMO DATA</span>
+    </div>
+
+    <div className="workspace-grid">
+      <form className="planner-form" onSubmit={handleSubmit} noValidate>
+        <div className="section-heading">
+          <div><p className="eyebrow">Your production day</p><h2>Scenario inputs</h2></div>
+          <button type="button" className="text-button" onClick={resetSample}>Reset sample</button>
+        </div>
+
+        <section className="panel resource-panel" aria-labelledby="resources-heading">
+          <div className="panel-heading">
+            <span className="step-number">01</span>
+            <div><h3 id="resources-heading">Available resources</h3><p>Set the supply and shared production time for today.</p></div>
+          </div>
+          <div className="resource-fields">
+            {INGREDIENT_IDS.map((ingredient) => <Field
+              key={ingredient}
+              id={`available-${ingredient}`}
+              label={`${INGREDIENT_LABELS[ingredient]} juice`}
+              unit="L available"
+              value={inputs.available_ingredient_litres[ingredient]}
+              error={fieldError(`available_ingredient_litres.${ingredient}`)}
+              onChange={(value) => updateAvailability(ingredient, value)}
+            />)}
+            <Field
+              id="processing-capacity"
+              label="Processing time"
+              unit="hours"
+              value={inputs.processing_capacity_hours}
+              hint="Shared across all blends"
+              error={fieldError("processing_capacity_hours")}
+              onChange={(value) => { setInputs((current) => ({ ...current, processing_capacity_hours: value })); setNotice(""); }}
+            />
+          </div>
+        </section>
+
+        <section className="blend-section" aria-labelledby="blends-heading">
+          <div className="panel-heading blend-heading">
+            <span className="step-number">02</span>
+            <div><h3 id="blends-heading">Blend setup</h3><p>Recipes, contribution and demand for each product.</p></div>
+          </div>
+          <div className="blend-list">
+            {BLEND_IDS.map((blendId, index) => {
+              const blend = blendInput(blendId);
+              return <article className={`panel blend-card blend-${blendId}`} key={blendId} aria-labelledby={`blend-title-${blendId}`}>
+                <div className="blend-card-top">
+                  <span className={`blend-icon blend-icon-${index + 1}`} aria-hidden="true">{["◒", "◍", "✳"][index]}</span>
+                  <div><p className="blend-kicker">BLEND 0{index + 1}</p><h4 id={`blend-title-${blendId}`}>{BLEND_LABELS[blendId]}</h4></div>
+                  <span className="recipe-badge">Recipe shares</span>
+                </div>
+                <div className="recipe-grid">
+                  {INGREDIENT_IDS.map((ingredient) => <Field
+                    key={ingredient}
+                    id={`recipe-${blendId}-${ingredient}`}
+                    label={INGREDIENT_LABELS[ingredient]}
+                    unit="%"
+                    value={blend.recipe_percent[ingredient]}
+                    error={fieldError(`blends.${blendId}.recipe_percent.${ingredient}`)}
+                    onChange={(value) => updateRecipe(blendId, ingredient, value)}
+                  />)}
+                </div>
+                {submitted && errors[`blends.${blendId}.recipe_percent`] && <p className="group-error" role="alert">{errors[`blends.${blendId}.recipe_percent`]}</p>}
+                <div className="blend-detail-grid">
+                  <Field id={`profit-${blendId}`} label="Contribution" inputMode="text" unit="AUD / L" value={blend.profit_aud_per_litre}
+                    hint="Can be negative" error={fieldError(`blends.${blendId}.profit_aud_per_litre`)}
+                    onChange={(value) => updateBlend(blendId, "profit_aud_per_litre", value)} />
+                  <Field id={`processing-${blendId}`} label="Processing" unit="min / L" value={blend.processing_minutes_per_litre}
+                    error={fieldError(`blends.${blendId}.processing_minutes_per_litre`)}
+                    onChange={(value) => updateBlend(blendId, "processing_minutes_per_litre", value)} />
+                  <Field id={`minimum-${blendId}`} label="Minimum order" unit="L" value={blend.min_litres}
+                    error={fieldError(`blends.${blendId}.min_litres`)}
+                    onChange={(value) => updateBlend(blendId, "min_litres", value)} />
+                  <Field id={`maximum-${blendId}`} label="Maximum demand" unit="L" value={blend.max_litres}
+                    error={fieldError(`blends.${blendId}.max_litres`)}
+                    onChange={(value) => updateBlend(blendId, "max_litres", value)} />
+                </div>
+                <p className="blend-footnote">Recipe percentages must add up to 100%. Enter continuous litres; fractional output is allowed.</p>
+              </article>;
+            })}
+          </div>
+        </section>
+
+        <div className="form-actions">
+          <div className="action-copy"><span className="action-spark" aria-hidden="true">✦</span><span>Ready when your inputs are set.</span></div>
+          <button className="primary-button" type="submit">Optimize scenario <span aria-hidden="true">↗</span></button>
+        </div>
+        {notice && <p className={hasErrors ? "form-notice form-notice-error" : "form-notice"} role="status">{notice}</p>}
+      </form>
+
+      <aside className="sidebar" aria-label="Model guide">
+        <section className="guide-card">
+          <div className="guide-icon" aria-hidden="true">✦</div>
+          <p className="eyebrow">The planning model</p>
+          <h2>Good plans<br />start with balance.</h2>
+          <p>Production is planned for one day across three juice blends. Recipes stay fixed during a calculation and can be changed before the next one.</p>
+          <div className="guide-divider" />
+          <h3>What the plan considers</h3>
+          <ul className="assumption-list">
+            <li><span className="check-mark">✓</span><span>Ingredient supply is shared across blends.</span></li>
+            <li><span className="check-mark">✓</span><span>Processing capacity is shared across the day.</span></li>
+            <li><span className="check-mark">✓</span><span>Every litre of ingredients yields one litre of juice.</span></li>
+            <li><span className="check-mark">✓</span><span>Production is continuous; fractional litres are possible.</span></li>
+          </ul>
+        </section>
+        <section className="contribution-card">
+          <span className="contribution-icon" aria-hidden="true">↗</span>
+          <div><strong>Contribution ≠ net profit</strong><p>Contribution excludes costs outside the values entered here.</p></div>
+        </section>
+        <p className="sidebar-caption">Use this planner as a decision aid. Review the assumptions before acting on a recommendation.</p>
+      </aside>
+    </div>
+
+    <footer className="footer"><span>PRODUCTION PLANNER</span><span>One day · Three blends · Fictional sample data</span></footer>
   </main>;
 }
