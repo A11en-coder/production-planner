@@ -1,0 +1,32 @@
+{
+  "api_version": 1,
+  "model_version": "juice-day-v1",
+  "blends": [
+    {
+      "id": "orange_apple",
+      "recipe_percent": {"orange": "60", "apple": "40", "pineapple": "0"},
+      "profit_aud_per_litre": "2.00",
+      "processing_minutes_per_litre": "2",
+      "min_litres": "0",
+      "max_litres": "60"
+    },
+    {
+      "id": "apple_pineapple",
+      "recipe_percent": {"orange": "0", "apple": "50", "pineapple": "50"},
+      "profit_aud_per_litre": "1.80",
+      "processing_minutes_per_litre": "2",
+      "min_litres": "0",
+      "max_litres": "60"
+    },
+    {
+      "id": "tropical",
+      "recipe_percent": {"orange": "30", "apple": "30", "pineapple": "40"},
+      "profit_aud_per_litre": "2.50",
+      "processing_minutes_per_litre": "3",
+      "min_litres": "0",
+      "max_litres": "60"
+    }
+  ],
+  "available_ingredient_litres": {"orange": "40", "apple": "40", "pineapple": "30"},
+  "processing_capacity_hours": "4"
+}
