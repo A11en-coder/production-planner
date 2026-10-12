@@ -1,6 +1,6 @@
 # Capability 1.1 — hosting and Python API feasibility evidence
 
-Status: **ready for owner completion review; not yet approved or committed**. Recorded 12 October 2026 (Australia/Sydney). This is evidence for the capped G01 investigation, not final T14 performance acceptance.
+Status: **approved and committed**. Allen approved Capability 1.1 on 12 October 2026; implementation checkpoint `a9c44b1`. Recorded 12 October 2026 (Australia/Sydney). This is evidence for the capped G01 investigation, not final T14 performance acceptance.
 
 ## Question and approved target
 
@@ -83,6 +83,6 @@ The LP has three variables and four resource rows. On the current preview, appli
 - [x] Confirm the connected Vercel account's free plan/usage through Allen and the signed-in Usage page values above. The successfully deployed Python bundle establishes that this build fits the account's current deployment limits. The exact uncompressed function bundle size is not exposed by the available deployment/build output; the 55.79 MB build cache is not that size.
 - [x] Review the one earlier browser network failure: it did not reach the FastAPI log, and no repeat occurred in the final pair's eight accepted browser calculations or two public smoke passes. Its root cause is unverified, so it remains an observed transient reliability risk rather than a proven platform or application defect; later T13/T14 checks must retain it in the evidence.
 - [x] Record spike time: approximately **1.1 wall-clock hours** from capability preparation at about 23:53 UTC to the final verification at 00:58 UTC, including the intentional 30-minute idle interval. This is below the 10-hour cap; hands-on time was not separately clocked.
-- [ ] Complete the guided code walkthrough and obtain Allen's explicit completion approval before the Git checkpoint and `progress.md` update.
+- [x] Complete the guided code walkthrough; Allen explicitly approved completion on 12 October 2026. Capability checkpoint: `a9c44b1`; `progress.md` was updated after that checkpoint.
 
 Final T14 (20 individual warm calls, three batches of five concurrent calls, and three after-inactivity calls on the completed dashboard), the WAF rate rule, full accessibility/browser matrix, reviewer timing, release and rollback remain later gates in [progress.md](../progress.md). This harness does not claim those gates are complete.
