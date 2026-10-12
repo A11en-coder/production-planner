@@ -73,14 +73,25 @@ h1 span { color: var(--mint); }
 .store-help, .empty-scenarios { margin: 8px 0 0; color: #9eaca1; font-size: 9px; }
 .saved-scenario-list { display: grid; gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; }
 .saved-scenario-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 10px; border: 1px solid #ffffff14; border-radius: 8px; background: #11191699; }
+.saved-scenario-detail { min-width: 0; }
 .saved-scenario-list strong { display: block; color: #e4ece2; font-size: 10px; overflow-wrap: anywhere; }
 .saved-scenario-list small { display: block; margin-top: 3px; color: #99aa9e; font-size: 9px; }
 .open-scenario-button { min-height: 31px; flex: 0 0 auto; padding: 0 11px; }
+.scenario-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+.scenario-edit-confirm { display: flex; flex: 1 0 100%; align-items: center; flex-wrap: wrap; gap: 7px; padding: 8px; border: 1px solid #d8a56e44; border-radius: 7px; background: #d8a56e0b; color: #e0c291; font-size: 9px; }
+.scenario-edit-confirm label { color: #d6e1d7; }
+.scenario-edit-confirm input { width: min(230px, 100%); height: 31px; padding: 0 8px; border: 1px solid #3a4b43; border-radius: 6px; background: #111a17; color: #f1f5ee; font-size: 10px; }
+.scenario-edit-confirm input:focus-visible { outline: 2px solid #d6ffe1; outline-offset: 2px; }
+.manage-scenario-button, .delete-scenario-button { min-height: 31px; padding: 0 9px; border: 1px solid #87988a55; border-radius: 7px; background: #ffffff08; color: #c1cec3; font-size: 9px; font-weight: 650; cursor: pointer; }
+.manage-scenario-button:hover { border-color: #bce5c5; color: #e7f5e9; }
+.delete-scenario-button { border-color: #e48c7d55; color: #e6a79b; }
+.delete-scenario-button:hover { border-color: #e48c7d; background: #e48c7d12; }
+.manage-scenario-button:disabled, .delete-scenario-button:disabled { opacity: .45; cursor: not-allowed; }
 .store-warning, .store-message { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; padding: 9px 10px; border: 1px solid #d8a56e55; border-radius: 7px; background: #d8a56e0b; color: #e0c291; font-size: 10px; line-height: 1.45; }
 .store-message-success { border-color: #8ec59a55; background: #b5edc90d; color: #c8e4ce; }
 .store-message-error { border-color: #e48c7d55; background: #e48c7d0d; color: #f0b1a3; }
 .recovery-button { flex: 0 0 auto; padding: 5px 8px; border: 1px solid currentColor; border-radius: 6px; background: transparent; color: inherit; font-size: 9px; font-weight: 700; cursor: pointer; }
-.recovery-button:focus-visible, .save-button:focus-visible, .open-scenario-button:focus-visible { outline: 2px solid #d6ffe1; outline-offset: 2px; }
+.recovery-button:focus-visible, .save-button:focus-visible, .open-scenario-button:focus-visible, .manage-scenario-button:focus-visible, .delete-scenario-button:focus-visible { outline: 2px solid #d6ffe1; outline-offset: 2px; }
 
 .workspace-grid { display: grid; grid-template-columns: minmax(0, 1fr) 274px; align-items: start; gap: 24px; }
 .planner-form { min-width: 0; }
@@ -255,6 +266,8 @@ h1 span { color: var(--mint); }
   .scenario-save-row { align-items: stretch; flex-direction: column; }
   .save-button { min-height: 42px; }
   .store-warning, .store-message { align-items: flex-start; flex-direction: column; }
+  .saved-scenario-list li { align-items: flex-start; flex-direction: column; }
+  .scenario-actions { justify-content: flex-start; }
   .action-copy { justify-content: center; }
   .primary-button { width: 100%; }
   .quantity-list { grid-template-columns: 1fr; }

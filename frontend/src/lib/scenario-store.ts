@@ -36,6 +36,8 @@ export class ScenarioStoreError extends Error {
 }
 
 type StoragePort = Pick<Storage, "getItem" | "setItem">;
+export type ScenarioLockPort = Pick<LockManager, "request">;
+const SCENARIO_LOCK_NAME = "production-planner:scenarios:v1:write";
 
 export function readScenarioStore(storage: StoragePort): ScenarioStoreState {
   let rawText: string | null;
@@ -87,8 +89,9 @@ export function readScenarioStore(storage: StoragePort): ScenarioStoreState {
   };
 }
 
-export function saveScenario(
+export async function saveScenario(
   storage: StoragePort,
+  locks: ScenarioLockPort | undefined,
   current: ScenarioStoreState,
   nameValue: string,
   inputs: PlanningInputs,
@@ -96,15 +99,11 @@ export function saveScenario(
   resultInputs: PlanningInputs | null,
   now = new Date(),
   id = globalThis.crypto.randomUUID(),
-): ScenarioStoreState {
+): Promise<ScenarioStoreState> {
   if (current.kind !== "ready") throw new ScenarioStoreError("Reload the saved collection before saving.", "STORE_BLOCKED");
   if (current.unreadableCount > 0) throw new ScenarioStoreError("The collection contains unreadable records. Reset it with explicit confirmation before saving.", "INVALID_RECORDS");
   const name = nameValue.trim();
   if (name.length < 1 || name.length > 50) throw new ScenarioStoreError("Enter a scenario name from 1 to 50 characters.", "INVALID_NAME");
-  if (current.scenarios.length >= MAX_SCENARIOS) throw new ScenarioStoreError("The saved collection is full. No scenarios were changed.", "COLLECTION_FULL");
-  if (current.scenarios.some((scenario) => scenario.name.trim().toLowerCase() === name.toLowerCase())) {
-    throw new ScenarioStoreError("A scenario with this name already exists. Choose a different name.", "DUPLICATE_NAME");
-  }
   if (Object.keys(validateInputs(inputs)).length > 0) throw new ScenarioStoreError("Correct the highlighted inputs before saving.", "INVALID_INPUTS");
 
   const currentResult = result && resultInputs && samePlanningInputs(inputs, resultInputs) &&
@@ -119,41 +118,118 @@ export function saveScenario(
     result_input_snapshot: currentResult ? structuredClone(inputs) : null,
     result_outdated: false,
   };
-  const previous = current.rawEnvelope ?? { schema_version: 1 as const, revision: 0, scenarios: [] };
-  const next: ScenarioStoreEnvelope = {
-    schema_version: 1,
-    revision: current.revision + 1,
-    scenarios: [...previous.scenarios, stored],
-  };
-
-  try {
-    const latest = readScenarioStore(storage);
-    if (latest.kind !== "ready") throw new ScenarioStoreError("Saved storage changed or became unavailable. Reload it before retrying.", "STORE_CHANGED");
-    if (latest.revision !== current.revision) throw new ScenarioStoreError("The saved collection changed in another tab. Reload saved scenarios, then retry.", "STALE_REVISION");
-    if (latest.unreadableCount > 0) throw new ScenarioStoreError("The collection contains unreadable records. Reset it with explicit confirmation before saving.", "INVALID_RECORDS");
-    storage.setItem(SCENARIO_STORAGE_KEY, JSON.stringify(next));
-  } catch (cause) {
-    if (cause instanceof ScenarioStoreError) throw cause;
-    throw new ScenarioStoreError("The scenario was not saved. Browser storage may be unavailable or full; your current work is unchanged. Retry the save when ready.", "WRITE_FAILED");
-  }
-  return {
-    kind: "ready",
-    revision: next.revision,
-    scenarios: [...current.scenarios, stored],
-    unreadableCount: 0,
-    rawEnvelope: next,
-  };
+  return mutateScenarioStore(storage, locks, current, (records) => [...records, stored], "The scenario was not saved.", (latest) => {
+    if (latest.scenarios.length >= MAX_SCENARIOS) throw new ScenarioStoreError("The saved collection is full. No scenarios were changed.", "COLLECTION_FULL");
+    if (latest.scenarios.some((scenario) => scenario.name.toLowerCase() === name.toLowerCase())) {
+      throw new ScenarioStoreError("A scenario with this name already exists. Choose a different name.", "DUPLICATE_NAME");
+    }
+  });
 }
 
-export function resetScenarioStore(storage: StoragePort, confirmed: boolean): ScenarioStoreState {
+export async function updateScenario(
+  storage: StoragePort, locks: ScenarioLockPort | undefined, current: ScenarioStoreState, id: string,
+  inputs: PlanningInputs, result: CalculationResult | null, resultInputs: PlanningInputs | null, now = new Date(),
+): Promise<ScenarioStoreState> {
+  if (Object.keys(validateInputs(inputs)).length > 0) throw new ScenarioStoreError("Correct the highlighted inputs before updating.", "INVALID_INPUTS");
+  const existing = requireScenario(current, id);
+  const currentResult = result && resultInputs && samePlanningInputs(inputs, resultInputs) &&
+    result.api_version === API_VERSION && result.model_version === MODEL_VERSION;
+  const updated: SavedScenario = {
+    ...existing,
+    inputs: structuredClone(inputs),
+    result: currentResult ? structuredClone(result) : null,
+    result_input_snapshot: currentResult ? structuredClone(inputs) : null,
+    result_outdated: false,
+    updated_at: now.toISOString(),
+  };
+  return mutateScenarioStore(storage, locks, current,
+    (records) => replaceScenarioRecord(records, id, updated), "The scenario was not updated.");
+}
+
+export async function renameScenario(
+  storage: StoragePort, locks: ScenarioLockPort | undefined, current: ScenarioStoreState, id: string,
+  nameValue: string, now = new Date(),
+): Promise<ScenarioStoreState> {
+  const name = nameValue.trim();
+  if (name.length < 1 || name.length > 50) throw new ScenarioStoreError("Enter a scenario name from 1 to 50 characters.", "INVALID_NAME");
+  if (current.kind !== "ready") throw new ScenarioStoreError("Reload the saved collection before changing it.", "STORE_BLOCKED");
+  const existing = requireScenario(current, id);
+  return mutateScenarioStore(storage, locks, current,
+    (records) => replaceScenarioRecord(records, id, { ...existing, name, updated_at: now.toISOString() }),
+    "The scenario was not renamed.", (latest) => {
+      if (latest.scenarios.some((item) => item.id !== id && item.name.toLowerCase() === name.toLowerCase())) {
+        throw new ScenarioStoreError("A scenario with this name already exists. Choose a different name.", "DUPLICATE_NAME");
+      }
+    });
+}
+
+export async function deleteScenario(
+  storage: StoragePort, locks: ScenarioLockPort | undefined, current: ScenarioStoreState, id: string,
+): Promise<ScenarioStoreState> {
+  requireScenario(current, id);
+  return mutateScenarioStore(storage, locks, current,
+    (records) => records.filter((record) => !isRecord(record) || record.id !== id), "The scenario was not deleted.");
+}
+
+export async function resetScenarioStore(storage: StoragePort, locks: ScenarioLockPort | undefined, confirmed: boolean): Promise<ScenarioStoreState> {
   if (!confirmed) throw new ScenarioStoreError("Explicit confirmation is required to reset saved scenarios.", "CONFIRMATION_REQUIRED");
+  if (!locks) throw new ScenarioStoreError("This browser cannot safely lock saved scenarios. Collection reset is unavailable here.", "LOCK_UNAVAILABLE");
   try {
-    storage.setItem(SCENARIO_STORAGE_KEY, JSON.stringify({ schema_version: 1, revision: 1, scenarios: [] }));
-  } catch {
-    return { kind: "unavailable", message: "The saved collection could not be reset. Its stored data remains unchanged." };
+    return await locks.request(SCENARIO_LOCK_NAME, { mode: "exclusive" }, async () => {
+      const latest = readScenarioStore(storage);
+      const revision = latest.kind === "ready" ? latest.revision + 1 : 1;
+      storage.setItem(SCENARIO_STORAGE_KEY, JSON.stringify({ schema_version: 1, revision, scenarios: [] }));
+      return readScenarioStore(storage);
+    });
+  } catch (cause) {
+    if (cause instanceof ScenarioStoreError) throw cause;
+    throw new ScenarioStoreError("The saved collection could not be reset. Its stored data remains unchanged.", "WRITE_FAILED");
   }
-  return { kind: "ready", revision: 1, scenarios: [], unreadableCount: 0,
-    rawEnvelope: { schema_version: 1, revision: 1, scenarios: [] } };
+}
+
+async function mutateScenarioStore(
+  storage: StoragePort, locks: ScenarioLockPort | undefined, expected: ScenarioStoreState,
+  transform: (records: unknown[]) => unknown[], actionMessage: string,
+  validateLatest: (latest: Extract<ScenarioStoreState, { kind: "ready" }>) => void = () => undefined,
+): Promise<ScenarioStoreState> {
+  if (!locks) throw new ScenarioStoreError("This browser cannot safely lock saved scenarios. Changes are unavailable here.", "LOCK_UNAVAILABLE");
+  if (expected.kind !== "ready") throw new ScenarioStoreError("Reload the saved collection before changing it.", "STORE_BLOCKED");
+  if (expected.unreadableCount > 0) throw new ScenarioStoreError("The collection contains unreadable records. Reset it with explicit confirmation before changing it.", "INVALID_RECORDS");
+  try {
+    return await locks.request(SCENARIO_LOCK_NAME, { mode: "exclusive" }, async () => {
+      const latest = readScenarioStore(storage);
+      if (latest.kind !== "ready") throw new ScenarioStoreError("Saved storage changed or became unavailable. Reload it before retrying.", "STORE_CHANGED");
+      if (latest.revision !== expected.revision) throw new ScenarioStoreError("Another tab changed the saved collection. The latest list has been reloaded; your current inputs are unchanged.", "STALE_REVISION");
+      if (latest.unreadableCount > 0) throw new ScenarioStoreError("The collection contains unreadable records. Reset it with explicit confirmation before changing it.", "INVALID_RECORDS");
+      validateLatest(latest);
+      const previous = latest.rawEnvelope ?? { schema_version: 1 as const, revision: 0, scenarios: [] };
+      const next: ScenarioStoreEnvelope = { schema_version: 1, revision: latest.revision + 1, scenarios: transform(previous.scenarios) };
+      storage.setItem(SCENARIO_STORAGE_KEY, JSON.stringify(next));
+      const confirmed = readScenarioStore(storage);
+      if (confirmed.kind !== "ready" || confirmed.revision !== next.revision || confirmed.unreadableCount > 0) {
+        throw new ScenarioStoreError(`${actionMessage} Browser storage did not confirm the collection update.`, "WRITE_UNCONFIRMED");
+      }
+      return confirmed;
+    });
+  } catch (cause) {
+    if (cause instanceof ScenarioStoreError) throw cause;
+    throw new ScenarioStoreError(`${actionMessage} Browser storage may be unavailable or full; your current work is unchanged.`, "WRITE_FAILED");
+  }
+}
+
+function requireScenario(current: ScenarioStoreState, id: string): SavedScenario {
+  if (current.kind !== "ready") throw new ScenarioStoreError("Reload the saved collection before changing it.", "STORE_BLOCKED");
+  if (current.unreadableCount > 0) throw new ScenarioStoreError("The collection contains unreadable records. Reset it with explicit confirmation before changing it.", "INVALID_RECORDS");
+  const scenario = current.scenarios.find((item) => item.id === id);
+  if (!scenario) throw new ScenarioStoreError("This scenario is no longer in the saved collection. Reload the list and try again.", "SCENARIO_MISSING");
+  return scenario;
+}
+
+function replaceScenarioRecord(records: unknown[], id: string, replacement: SavedScenario): unknown[] {
+  if (!records.some((record) => isRecord(record) && record.id === id)) {
+    throw new ScenarioStoreError("This scenario is no longer in the saved collection. Reload the list and try again.", "SCENARIO_MISSING");
+  }
+  return records.map((record) => isRecord(record) && record.id === id ? replacement : record);
 }
 
 export function parsePlanningInputs(value: unknown): PlanningInputs | null {

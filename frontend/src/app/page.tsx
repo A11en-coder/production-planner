@@ -20,7 +20,12 @@ import {
   ScenarioStoreError,
   samePlanningInputs,
   saveScenario,
+  updateScenario,
+  renameScenario,
+  deleteScenario,
+  SCENARIO_STORAGE_KEY,
   type ScenarioStoreState,
+  type ScenarioLockPort,
 } from "@/lib/scenario-store";
 
 type FieldProps = {
@@ -33,6 +38,11 @@ type FieldProps = {
   error?: string;
   onChange: (value: string) => void;
 };
+
+type PendingScenarioAction =
+  | { kind: "update"; id: string; name: string }
+  | { kind: "delete"; id: string; name: string }
+  | { kind: "rename"; id: string; name: string; proposedName: string };
 
 function Field({ id, label, value, inputMode = "decimal", unit, hint, error, onChange }: FieldProps) {
   const hintId = `${id}-hint`;
@@ -72,7 +82,14 @@ export default function Home() {
   const [scenarioName, setScenarioName] = useState("");
   const [storeMessage, setStoreMessage] = useState("");
   const [storeMessageKind, setStoreMessageKind] = useState<"success" | "error" | "info">("info");
+  const [retrySaveAvailable, setRetrySaveAvailable] = useState(false);
+  const [supportsScenarioLocks, setSupportsScenarioLocks] = useState(true);
   const [hasUnsavedWork, setHasUnsavedWork] = useState(true);
+  const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState<{ id: string; name: string; value: string } | null>(null);
+  const [pendingScenarioAction, setPendingScenarioAction] = useState<PendingScenarioAction | null>(null);
+  const [pendingOpenScenarioId, setPendingOpenScenarioId] = useState<string | null>(null);
+  const [pendingCollectionReset, setPendingCollectionReset] = useState(false);
   const revision = useRef(0);
   const activeRequest = useRef<{
     revision: number;
@@ -85,13 +102,23 @@ export default function Home() {
   const resultIsOutdated = result !== null && resultRevision !== revision.current;
 
   useEffect(() => {
+    setSupportsScenarioLocks(typeof navigator.locks !== "undefined");
     refreshStoredScenarios();
+    function handleStorage(event: StorageEvent) {
+      if (event.key !== null && event.key !== SCENARIO_STORAGE_KEY) return;
+      refreshStoredScenarios();
+      setStoreMessage("Saved scenarios changed in another tab. The list was refreshed; current planner inputs were kept.");
+      setStoreMessageKind("info");
+    }
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
   function refreshStoredScenarios() {
     try {
       setStoreState(readScenarioStore(window.localStorage));
       setStoreMessage("");
+      setRetrySaveAvailable(false);
     } catch {
       setStoreState({ kind: "unavailable", message: "Browser storage is unavailable. Your current work is still usable in this tab." });
     }
@@ -152,28 +179,113 @@ export default function Home() {
     setInputs(structuredClone(SAMPLE_INPUTS));
     setSubmitted(false);
     setHasUnsavedWork(true);
+    setActiveScenarioId(null);
     setStoreMessage("");
   }
 
-  function saveCurrentScenario() {
+  function scenarioLocks(): ScenarioLockPort | undefined {
+    return typeof window.navigator.locks === "undefined" ? undefined : window.navigator.locks;
+  }
+
+  async function saveCurrentScenario() {
+    const submittedRevision = revision.current;
     try {
       const currentResult = result && resultRevision === revision.current && !resultIsOutdated &&
         resultInputs && samePlanningInputs(inputs, resultInputs) ? result : null;
-      const saved = saveScenario(window.localStorage, storeState, scenarioName, inputs, currentResult,
+      const saved = await saveScenario(window.localStorage, scenarioLocks(), storeState, scenarioName, inputs, currentResult,
         currentResult ? resultInputs : null);
       setStoreState(saved);
-      setStoreMessage(`“${scenarioName.trim()}” was saved in this browser.`);
+      const changedWhileSaving = revision.current !== submittedRevision;
+      setStoreMessage(changedWhileSaving
+        ? `“${scenarioName.trim()}” was saved. Newer planner edits remain unsaved.`
+        : `“${scenarioName.trim()}” was saved in this browser.`);
       setStoreMessageKind("success");
-      setHasUnsavedWork(false);
+      setRetrySaveAvailable(false);
+      if (!changedWhileSaving) {
+        setHasUnsavedWork(false);
+        setActiveScenarioId(null);
+      }
       setScenarioName("");
     } catch (cause) {
+      if (cause instanceof ScenarioStoreError && ["STALE_REVISION", "STORE_CHANGED"].includes(cause.code)) refreshStoredScenarios();
+      setRetrySaveAvailable(cause instanceof ScenarioStoreError && !["STALE_REVISION", "STORE_CHANGED"].includes(cause.code));
       setStoreMessage(cause instanceof ScenarioStoreError ? cause.message : "The scenario was not saved. Your current work remains available; retry when ready.");
       setStoreMessageKind("error");
     }
   }
 
-  function openSavedScenario(id: string) {
-    if (hasUnsavedWork && !window.confirm("Open this saved scenario and replace the current unsaved planner work?")) return;
+  async function updateSavedScenario(id: string, name: string) {
+    const submittedRevision = revision.current;
+    try {
+      const currentResult = result && resultRevision === revision.current && !resultIsOutdated &&
+        resultInputs && samePlanningInputs(inputs, resultInputs) ? result : null;
+      const saved = await updateScenario(window.localStorage, scenarioLocks(), storeState, id, inputs, currentResult,
+        currentResult ? resultInputs : null);
+      setStoreState(saved);
+      const changedWhileSaving = revision.current !== submittedRevision;
+      setStoreMessage(changedWhileSaving
+        ? `“${name}” was updated. Newer planner edits remain unsaved.`
+        : `“${name}” was updated from the current planner inputs.`);
+      setStoreMessageKind("success");
+      setRetrySaveAvailable(false);
+      if (!changedWhileSaving) {
+        setHasUnsavedWork(false);
+        setActiveScenarioId(id);
+      }
+    } catch (cause) {
+      if (cause instanceof ScenarioStoreError && ["STALE_REVISION", "STORE_CHANGED", "SCENARIO_MISSING"].includes(cause.code)) refreshStoredScenarios();
+      setRetrySaveAvailable(false);
+      setStoreMessage(cause instanceof ScenarioStoreError ? cause.message : "The scenario was not updated. Current planner inputs remain available.");
+      setStoreMessageKind("error");
+    }
+  }
+
+  async function renameSavedScenario(id: string, currentName: string, proposedName: string) {
+    try {
+      const saved = await renameScenario(window.localStorage, scenarioLocks(), storeState, id, proposedName);
+      setStoreState(saved);
+      setStoreMessage(`Scenario renamed to “${proposedName.trim()}”.`);
+      setStoreMessageKind("success");
+      setRetrySaveAvailable(false);
+    } catch (cause) {
+      if (cause instanceof ScenarioStoreError && ["STALE_REVISION", "STORE_CHANGED", "SCENARIO_MISSING"].includes(cause.code)) refreshStoredScenarios();
+      setRetrySaveAvailable(false);
+      setStoreMessage(cause instanceof ScenarioStoreError ? cause.message : "The scenario was not renamed.");
+      setStoreMessageKind("error");
+    }
+  }
+
+  async function deleteSavedScenario(id: string, name: string) {
+    try {
+      const saved = await deleteScenario(window.localStorage, scenarioLocks(), storeState, id);
+      setStoreState(saved);
+      if (activeScenarioId === id) setActiveScenarioId(null);
+      setStoreMessage(`“${name}” was deleted from this browser.`);
+      setStoreMessageKind("success");
+      setRetrySaveAvailable(false);
+    } catch (cause) {
+      if (cause instanceof ScenarioStoreError && ["STALE_REVISION", "STORE_CHANGED", "SCENARIO_MISSING"].includes(cause.code)) refreshStoredScenarios();
+      setRetrySaveAvailable(false);
+      setStoreMessage(cause instanceof ScenarioStoreError ? cause.message : "The scenario was not deleted.");
+      setStoreMessageKind("error");
+    }
+  }
+
+  function confirmScenarioAction() {
+    const action = pendingScenarioAction;
+    setPendingScenarioAction(null);
+    if (!action) return;
+    if (action.kind === "update") void updateSavedScenario(action.id, action.name);
+    if (action.kind === "delete") void deleteSavedScenario(action.id, action.name);
+    if (action.kind === "rename") void renameSavedScenario(action.id, action.name, action.proposedName);
+  }
+
+  function openSavedScenario(id: string, confirmed = false) {
+    if (hasUnsavedWork && !confirmed) {
+      setPendingOpenScenarioId(id);
+      return;
+    }
+    setPendingOpenScenarioId(null);
     if (storeState.kind !== "ready") return;
     const scenario = storeState.scenarios.find((item) => item.id === id);
     if (!scenario) return;
@@ -190,6 +302,7 @@ export default function Home() {
     setResultInputs(compatibleResult && scenario.result_input_snapshot ? structuredClone(scenario.result_input_snapshot) : null);
     setResultRevision(compatibleResult ? revision.current : null);
     setHasUnsavedWork(false);
+    setActiveScenarioId(id);
     setStoreMessage(compatibleResult
       ? `Opened “${scenario.name}” with its saved result.`
       : scenario.result_outdated
@@ -198,18 +311,24 @@ export default function Home() {
     setStoreMessageKind(compatibleResult ? "success" : "info");
   }
 
-  function recoverSavedCollection() {
-    const confirmed = window.confirm("Reset the saved browser collection? This permanently removes every saved scenario in this browser. Your current unsaved inputs will remain in the planner.");
-    if (!confirmed) return;
+  async function recoverSavedCollection() {
+    setPendingCollectionReset(false);
     try {
-      const reset = resetScenarioStore(window.localStorage, true);
+      const reset = await resetScenarioStore(window.localStorage, scenarioLocks(), true);
       setStoreState(reset);
+      setActiveScenarioId(null);
       setStoreMessage(reset.kind === "ready" ? "Saved collection reset. Current planner inputs were preserved." : reset.message);
       setStoreMessageKind(reset.kind === "ready" ? "success" : "error");
+      setRetrySaveAvailable(false);
     } catch (cause) {
+      setRetrySaveAvailable(false);
       setStoreMessage(cause instanceof Error ? cause.message : "The collection was not reset.");
       setStoreMessageKind("error");
     }
+  }
+
+  function requestCollectionReset() {
+    setPendingCollectionReset(true);
   }
 
   async function runCalculation() {
@@ -320,23 +439,50 @@ export default function Home() {
       </div>
       <p className="scenario-storage-copy">Save explicitly to this browser and website address. Nothing syncs to another device or saves automatically.</p>
       {storeState.kind === "ready" ? <>
+        {!supportsScenarioLocks && <p className="store-help">This browser does not support safe cross-tab storage locks. Saved scenarios can be opened, but changes are disabled here.</p>}
         <div className="scenario-save-row">
           <div className="field scenario-name-field"><label htmlFor="scenario-name">Scenario name<span className="unit">1–50 characters</span></label>
             <input id="scenario-name" type="text" maxLength={50} value={scenarioName} onChange={(event) => setScenarioName(event.target.value)} placeholder="e.g. Reduced orange supply" />
           </div>
-          <button type="button" className="save-button" onClick={saveCurrentScenario} disabled={hasErrors || storeState.unreadableCount > 0 || storeState.scenarios.length >= 20}>Save current scenario</button>
+          <button type="button" className="save-button" onClick={saveCurrentScenario} disabled={!supportsScenarioLocks || hasErrors || storeState.unreadableCount > 0 || storeState.scenarios.length >= 20}>Save current scenario</button>
         </div>
         {hasErrors && <p className="store-help">Fix the highlighted fields before saving. Incomplete input drafts are not stored.</p>}
-        {storeState.unreadableCount > 0 && <div className="store-warning" role="status"><span>{storeState.unreadableCount} unreadable record(s) are preserved. Saving is blocked to protect stored data.</span><button type="button" className="recovery-button" onClick={recoverSavedCollection}>Reset saved collection…</button></div>}
+        {storeState.unreadableCount > 0 && <div className="store-warning" role="status"><span>{storeState.unreadableCount} unreadable record(s) are preserved. Saving is blocked to protect stored data.</span><button type="button" className="recovery-button" onClick={requestCollectionReset}>Reset saved collection…</button></div>}
         {storeState.scenarios.length === 0 ? <p className="empty-scenarios">No saved scenarios in this browser yet.</p> : <ul className="saved-scenario-list">{storeState.scenarios.map((scenario) => <li key={scenario.id}>
-          <div><strong>{scenario.name}</strong><small>{scenario.result && !scenario.result_outdated ? "Current result saved" : scenario.result_outdated ? "Inputs saved · result needs recalculation" : "Inputs saved · no current result"} · Saved {new Date(scenario.updated_at).toLocaleString()}</small></div>
-          <button type="button" className="open-scenario-button" onClick={() => openSavedScenario(scenario.id)}>Open</button>
+          <div className="saved-scenario-detail"><strong>{scenario.name}{activeScenarioId === scenario.id ? " · open in planner" : ""}</strong><small>{scenario.result && !scenario.result_outdated ? "Current result saved" : scenario.result_outdated ? "Inputs saved · result needs recalculation" : "Inputs saved · no current result"} · Saved {new Date(scenario.updated_at).toLocaleString()}</small></div>
+          <div className="scenario-actions">
+            <button type="button" className="open-scenario-button" onClick={() => openSavedScenario(scenario.id)}>Open</button>
+            <button type="button" className="manage-scenario-button" onClick={() => setPendingScenarioAction({ kind: "update", id: scenario.id, name: scenario.name })} disabled={!supportsScenarioLocks || hasErrors || storeState.unreadableCount > 0} aria-label={`Update ${scenario.name} from current inputs`}>Update</button>
+            <button type="button" className="manage-scenario-button" onClick={() => setRenameDraft({ id: scenario.id, name: scenario.name, value: scenario.name })} disabled={!supportsScenarioLocks || storeState.unreadableCount > 0}>Rename</button>
+            <button type="button" className="delete-scenario-button" onClick={() => setPendingScenarioAction({ kind: "delete", id: scenario.id, name: scenario.name })} disabled={!supportsScenarioLocks || storeState.unreadableCount > 0}>Delete</button>
+          </div>
+          {pendingOpenScenarioId === scenario.id && <div className="scenario-edit-confirm" role="group" aria-label={`Confirm opening ${scenario.name}`}>
+            <span>Replace the current unsaved planner inputs with “{scenario.name}”?</span>
+            <button type="button" className="manage-scenario-button" onClick={() => openSavedScenario(scenario.id, true)}>Open and replace</button>
+            <button type="button" className="manage-scenario-button" onClick={() => setPendingOpenScenarioId(null)}>Cancel</button>
+          </div>}
+          {renameDraft?.id === scenario.id && <div className="scenario-edit-confirm">
+            <label htmlFor={`rename-${scenario.id}`}>New name for {scenario.name}</label>
+            <input id={`rename-${scenario.id}`} type="text" maxLength={50} value={renameDraft.value} onChange={(event) => setRenameDraft({ ...renameDraft, value: event.target.value })} />
+            <button type="button" className="manage-scenario-button" onClick={() => { setPendingScenarioAction({ kind: "rename", id: scenario.id, name: scenario.name, proposedName: renameDraft.value }); setRenameDraft(null); }}>Review rename</button>
+            <button type="button" className="manage-scenario-button" onClick={() => setRenameDraft(null)}>Cancel</button>
+          </div>}
+          {pendingScenarioAction?.id === scenario.id && <div className="scenario-edit-confirm" role="group" aria-label={`Confirm ${pendingScenarioAction.kind} for ${scenario.name}`}>
+            <span>{pendingScenarioAction.kind === "update" ? `Replace “${scenario.name}” with the current planner inputs?` : pendingScenarioAction.kind === "delete" ? `Permanently delete “${scenario.name}” from this browser?` : `Rename “${scenario.name}” to “${pendingScenarioAction.proposedName.trim()}”?`}</span>
+            <button type="button" className={pendingScenarioAction.kind === "delete" ? "delete-scenario-button" : "manage-scenario-button"} onClick={confirmScenarioAction}>Confirm {pendingScenarioAction.kind}</button>
+            <button type="button" className="manage-scenario-button" onClick={() => setPendingScenarioAction(null)}>Cancel</button>
+          </div>}
         </li>)}</ul>}
         {storeState.scenarios.length >= 20 && <p className="store-help">The collection limit is 20 scenarios. Saved items are not removed automatically.</p>}
       </> : <div className="store-warning" role="status"><span>{storeState.message}</span>
-        {storeState.kind === "unavailable" ? <button type="button" className="recovery-button" onClick={refreshStoredScenarios}>Retry storage</button> : <button type="button" className="recovery-button" onClick={recoverSavedCollection}>Reset saved collection…</button>}
+        {storeState.kind === "unavailable" ? <button type="button" className="recovery-button" onClick={refreshStoredScenarios}>Retry storage</button> : <button type="button" className="recovery-button" onClick={requestCollectionReset}>Reset saved collection…</button>}
       </div>}
-      {storeMessage && <p className={`store-message store-message-${storeMessageKind}`} role={storeMessageKind === "error" ? "alert" : "status"}>{storeMessage}{storeMessageKind === "error" && <button type="button" className="recovery-button" onClick={saveCurrentScenario}>Retry save</button>}</p>}
+      {pendingCollectionReset && <div className="scenario-edit-confirm" role="group" aria-label="Confirm saved collection reset">
+        <span>Reset the saved collection? This removes every saved scenario in this browser. Current planner inputs will remain.</span>
+        <button type="button" className="delete-scenario-button" onClick={() => void recoverSavedCollection()}>Confirm reset</button>
+        <button type="button" className="manage-scenario-button" onClick={() => setPendingCollectionReset(false)}>Cancel</button>
+      </div>}
+      {storeMessage && <p className={`store-message store-message-${storeMessageKind}`} role={storeMessageKind === "error" ? "alert" : "status"}>{storeMessage}{retrySaveAvailable && <button type="button" className="recovery-button" onClick={saveCurrentScenario}>Retry save</button>}</p>}
     </section>
 
     <div className="workspace-grid">
