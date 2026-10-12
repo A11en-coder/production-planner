@@ -1,5 +1,5 @@
 import { API_VERSION, MODEL_VERSION, parseCalculationResult, type CalculationResult } from "./api";
-import { BLEND_IDS, INGREDIENT_IDS, type BlendId, type IngredientId, type PlanningInputs } from "./planner";
+import { BLEND_IDS, INGREDIENT_IDS, type BlendId, type PlanningInputs } from "./planner";
 import { validateInputs } from "./validation";
 
 export const SCENARIO_STORAGE_KEY = "production-planner:scenarios:v1";

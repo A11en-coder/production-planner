@@ -8,3 +8,5 @@ node_modules/
 .next/
 .tools/
 *.tsbuildinfo
+frontend/test-results/
+frontend/playwright-report/

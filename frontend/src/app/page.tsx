@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import {
   BLEND_IDS,
   BLEND_LABELS,
@@ -44,6 +44,14 @@ type PendingScenarioAction =
   | { kind: "update"; id: string; name: string }
   | { kind: "delete"; id: string; name: string }
   | { kind: "rename"; id: string; name: string; proposedName: string };
+
+function subscribeToLockSupport() {
+  return () => undefined;
+}
+
+function readLockSupport() {
+  return typeof navigator !== "undefined" && typeof navigator.locks !== "undefined";
+}
 
 function formatComparisonValue(value: number, unit: ComparisonUnit): string {
   if (unit === "AUD") return formatContribution(value);
@@ -143,7 +151,7 @@ export default function Home() {
   const [storeMessage, setStoreMessage] = useState("");
   const [storeMessageKind, setStoreMessageKind] = useState<"success" | "error" | "info">("info");
   const [retrySaveAvailable, setRetrySaveAvailable] = useState(false);
-  const [supportsScenarioLocks, setSupportsScenarioLocks] = useState(true);
+  const supportsScenarioLocks = useSyncExternalStore(subscribeToLockSupport, readLockSupport, () => false);
   const [hasUnsavedWork, setHasUnsavedWork] = useState(true);
   const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState<{ id: string; name: string; value: string } | null>(null);
@@ -177,7 +185,6 @@ export default function Home() {
     : null;
 
   useEffect(() => {
-    setSupportsScenarioLocks(typeof navigator.locks !== "undefined");
     refreshStoredScenarios();
     function handleStorage(event: StorageEvent) {
       if (event.key !== null && event.key !== SCENARIO_STORAGE_KEY) return;
