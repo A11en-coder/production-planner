@@ -6,11 +6,11 @@ Last updated: 12 October 2026 (Australia/Sydney)
 
 - Product scope: [PRD v1.0](docs/Production_Planner_PRD.md), 11 October 2026, FR01–FR14 and NFR01–NFR09. The PRD prints “First draft for review”; [TRD v1.0](docs/Production_Planner_TRD.md#3-source-and-scope) records Allen's explicit approval of that scope.
 - Technical design: [TRD v1.0](docs/Production_Planner_TRD.md), 11 October 2026, approved. Its architecture and release gates are specifications, not completed implementation evidence.
-- Overall state: **Capabilities 1.1, 1.2, 2.1–2.4, and 3.1–3.3 implemented, verified, approved, and committed**. Capability 4.1 is queued for approval.
-- Current phase: **Phase 3 — public planner interface**. Last completed capability: **3.3 results and explanation**. Next capability: **4.1 versioned local collection and recovery**, queued for approval.
+- Overall state: **Capabilities 1.1, 1.2, 2.1–2.4, 3.1–3.3, and 4.1 implemented, verified, approved, and committed**. Capability 4.2 is queued for approval.
+- Current phase: **Phase 4 — saved scenarios and comparison**. Last completed capability: **4.1 versioned local collection and recovery**. Next capability: **4.2 explicit management and concurrent writes**, queued for approval.
 - Calendar start date: **not assigned**. The TRD's weeks are relative; do not infer a calendar deadline.
 - Budget: **180 planned hours**, 12 relative weeks × 15 hours. Capability 1.1 used approximately **1.1 wall-clock hours**, including its intentional 30-minute idle measurement; hands-on time was not separately clocked.
-- Last approved capability: **3.3 results and explanation**, explicitly approved 12 October 2026. Capability checkpoint: `926c38c`.
+- Last approved capability: **4.1 versioned local collection and recovery**, explicitly approved 12 October 2026. Capability checkpoint: `cf7a603`.
 
 ## Working rules for this tracker
 
@@ -42,7 +42,7 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 
 ### Phase 4 — saved scenarios and comparison (weeks 7–8; 30 hours)
 
-- [ ] **4.1 Versioned local collection and recovery.** Save/reopen valid inputs with optional current result; enforce schema/model compatibility and result snapshot; preserve corrupt/unsupported bytes and usable in-memory work on storage failure. Dependency: 3.2–3.3. Evidence: T08/T09. **FR07, FR09, FR11, NFR06.**
+- [x] **4.1 Versioned local collection and recovery.** Added [the browser collection store](frontend/src/lib/scenario-store.ts) and explicit save/open/recovery UI. Version-1 records validate inputs and optional results; results are current only with matching API/model metadata and canonical input snapshot. Corrupt or unsupported raw collections block writes until explicit confirmed reset; storage/quota/serialization errors preserve editable in-memory work and expose retry. Dependency: 3.2–3.3. Evidence: typecheck/build; focused memory-storage checks for save/reopen, result compatibility, corruption/reset, storage failures, and the 20-scenario cap; local browser accessibility-tree inspection; `git diff --check`. Browser control automation could not click Save/Open, and no frontend test runner is configured. **FR07, FR09, FR11, NFR06; T08/T09 partial.** Commit: `cf7a603`.
 - [ ] **4.2 Explicit management and concurrent writes.** Implement name trim/case uniqueness, 1–50 characters, 20-entry limit, explicit update/rename/delete and confirmations; guard writes with Web Lock plus collection revision and handle storage events. Dependency: 4.1. Evidence: T08/T10, including two-tab conflict and unavailable-lock cases. **FR08, FR11.**
 - [ ] **4.3 Saved comparison.** Select two distinct current, compatible optimal saved results; display input and result values with unrounded **B minus A** deltas, units, and mobile-readable tables/charts. Dependency: 4.1–4.2. Evidence: T11/T12. **FR10, FR14.**
 
@@ -133,6 +133,14 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 
 **Completion evidence:** Frontend typecheck and production build passed. Ten focused formatter runtime checks passed for tie rounding, negative zero, tiny positive quantities, positive/negative/tiny contributions, utilization, and raw numeric precision. `git diff --check` passed; local browser page load/accessibility-tree inspection passed. The browser automation surface did not expose result-submission actions, so optimal/infeasible rendered states were not exercised end-to-end in a browser; the repository has no frontend test runner. Next build emitted its existing notice that it ignores a parent `C:\Users\Allen\package-lock.json`. Owner approved on 12 October 2026; implementation checkpoint `926c38c`.
 
+## Completed capability record: 4.1 versioned local collection and recovery
+
+**Purpose and outcome:** Let the user explicitly save and reopen valid planner inputs, with an optional result tied to the exact input and model versions. Added [the versioned local store](frontend/src/lib/scenario-store.ts) and save/open/recovery controls to the [planner page](frontend/src/app/page.tsx). Data stays in browser `localStorage`; opening a compatible saved result restores it as current, while a changed input snapshot or incompatible model leaves the saved inputs usable and requires recalculation.
+
+**Representative path:** On page load, the store reads and validates the version-1 collection. Explicit save validates current planner inputs and scenario name, confirms any attached calculation matches the current canonical inputs and version metadata, rereads the collection revision, then writes and reports success only after storage accepts the update. Invalid/unsupported raw bytes block writes and remain intact until the user explicitly confirms collection reset. Read/write/quota/serialization failures leave the live form available and offer retry. Revision checking is in place; cross-tab locking and management operations are deferred to 4.2.
+
+**Completion evidence:** `npm run typecheck`, `npm run build`, and `git diff --check` passed. Focused memory-storage runtime checks passed for empty/load/save/reopen, duplicate names, stale revision rejection, valid optimal/infeasible result restoration, canonical snapshot equivalence, stale snapshot/model detection, malformed and unsupported data preservation, explicit reset confirmation, the 20-entry limit, read/write/quota/serialization errors, and retained state on failure. Local browser load/accessibility-tree inspection confirmed the Saved scenarios controls and local-storage scope. Browser automation exposed no click/type actions, so save/open was not exercised through UI controls; there is no frontend test runner. Existing Next build notice about the parent `C:\Users\Allen\package-lock.json` remains. Owner approved completion on 12 October 2026; implementation checkpoint `cf7a603`.
+
 ## Decisions, dependencies, and open risks
 
 | Item | Current record |
@@ -159,5 +167,6 @@ The phases retain the TRD's 180-hour allocation. Capability boundaries below mak
 | 12 Oct 2026 | Capability 3.1 / sample dashboard and editable inputs | Owner approved; frontend typecheck/build pass; validator runtime checks and local HTTP/accessibility-tree inspection pass; full sample form and model guide are present. | Not separately tracked | `df26153` |
 | 12 Oct 2026 | Capability 3.2 / calculation controller and freshness | Owner approved; typecheck/build pass; local API-module baseline, edited, shortage, canonicalization, malformed response, timeout, and abort checks pass. Browser click/type freshness automation unavailable; no frontend test runner is configured. | Not separately tracked | `daa2d43` |
 | 12 Oct 2026 | Capability 3.3 / results and explanation | Owner approved; frontend typecheck/build pass; formatter edge checks, local page/accessibility inspection, and diff check pass. Browser result-submission automation unavailable; no frontend test runner is configured. | Not separately tracked | `926c38c` |
+| 12 Oct 2026 | Capability 4.1 / versioned local collection and recovery | Owner approved; frontend typecheck/build and diff check pass; memory-storage checks cover save/reopen, snapshots/model compatibility, corruption recovery, failures, and 20-entry cap. Browser control automation unavailable; no frontend test runner is configured. | Not separately tracked | `cf7a603` |
 
 When closing a capability, add its check results, relevant PRD/TRD IDs, approval/decision, actual hours, and Git commit here; then advance the current phase/capability above. Keep failures and unresolved risks visible rather than checking a gate based on intent.
