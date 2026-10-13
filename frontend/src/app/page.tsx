@@ -646,36 +646,36 @@ export default function Home() {
         </div>
         <div className="sample-note" role="note"><strong>{samePlanningInputs(inputs, SAMPLE_INPUTS) && activeScenarioId === null ? "Fictional sample inputs" : "Current planning inputs"}</strong><span>Changes are not saved automatically.</span></div>
 
-        <section className="panel resource-panel" aria-labelledby="resources-heading">
-          <div className="panel-heading">
-            <span className="step-number">01</span>
+        <section className="resource-section" aria-labelledby="resources-heading">
+          <div className="panel-heading input-group-heading">
             <div><h3 id="resources-heading">Available resources</h3><p>Set the supply and shared production time for today.</p></div>
           </div>
-          <div className="resource-fields">
-            {INGREDIENT_IDS.map((ingredient) => <Field
-              key={ingredient}
-              id={`available-${ingredient}`}
-              label={`${INGREDIENT_LABELS[ingredient]} juice`}
-              unit="L available"
-              value={inputs.available_ingredient_litres[ingredient]}
-              error={fieldError(`available_ingredient_litres.${ingredient}`)}
-              onChange={(value) => updateAvailability(ingredient, value)}
-            />)}
-            <Field
-              id="processing-capacity"
-              label="Processing time"
-              unit="hours"
-              value={inputs.processing_capacity_hours}
-              hint="Shared across all blends"
-              error={fieldError("processing_capacity_hours")}
-      onChange={(value) => { invalidateActiveRequest(); setHasUnsavedWork(true); setInputs((current) => ({ ...current, processing_capacity_hours: value })); }}
-            />
+          <div className="panel resource-panel">
+            <div className="resource-fields">
+              {INGREDIENT_IDS.map((ingredient) => <Field
+                key={ingredient}
+                id={`available-${ingredient}`}
+                label={`${INGREDIENT_LABELS[ingredient]} juice`}
+                unit="L available"
+                value={inputs.available_ingredient_litres[ingredient]}
+                error={fieldError(`available_ingredient_litres.${ingredient}`)}
+                onChange={(value) => updateAvailability(ingredient, value)}
+              />)}
+              <Field
+                id="processing-capacity"
+                label="Processing time"
+                unit="hours"
+                value={inputs.processing_capacity_hours}
+                hint="Shared across all blends"
+                error={fieldError("processing_capacity_hours")}
+                onChange={(value) => { invalidateActiveRequest(); setHasUnsavedWork(true); setInputs((current) => ({ ...current, processing_capacity_hours: value })); }}
+              />
+            </div>
           </div>
         </section>
 
         <section className="blend-section" aria-labelledby="blends-heading">
-          <div className="panel-heading blend-heading">
-            <span className="step-number">02</span>
+          <div className="panel-heading input-group-heading">
             <div><h3 id="blends-heading">Blend setup</h3><p>Recipes, contribution and demand for each product.</p></div>
           </div>
           <div className="blend-list">
