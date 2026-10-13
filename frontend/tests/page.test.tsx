@@ -35,7 +35,7 @@ describe("planner page calculation workflow", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(successResponse()));
     render(<Home />);
 
-    await user.click(await screen.findByRole("button", { name: /Optimize scenario/ }));
+    await user.click(await screen.findByRole("button", { name: /Calculate production plan/ }));
     expect(await screen.findByRole("heading", { name: "Recommended production" })).toBeInTheDocument();
     expect(screen.getByRole("table", { name: /Recommended production and demand-limit status/ })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: /Production by blend/ })).toBeInTheDocument();
@@ -57,7 +57,7 @@ describe("planner page calculation workflow", () => {
     const orange = await screen.findByLabelText(/Orange juice/);
     await user.clear(orange);
     await user.type(orange, "33");
-    await user.click(screen.getByRole("button", { name: /Optimize scenario/ }));
+    await user.click(screen.getByRole("button", { name: /Calculate production plan/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Calculation timed out");
     expect(orange).toHaveValue("33");
     expect(screen.queryByRole("heading", { name: "Recommended production" })).not.toBeInTheDocument();
@@ -76,14 +76,14 @@ describe("planner page calculation workflow", () => {
     vi.stubGlobal("fetch", vi.fn().mockReturnValueOnce(delayedResponse).mockResolvedValueOnce(successResponse()));
     render(<Home />);
 
-    await user.click(await screen.findByRole("button", { name: /Optimize scenario/ }));
+    await user.click(await screen.findByRole("button", { name: /Calculate production plan/ }));
     expect(await screen.findByText(/Checking the scenario against available resources/)).toBeInTheDocument();
     await user.clear(screen.getByLabelText(/Orange juice/));
     await user.type(screen.getByLabelText(/Orange juice/), "35");
     resolveOldRequest(successResponse());
 
     await waitFor(() => expect(screen.queryByRole("heading", { name: "Recommended production" })).not.toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: /Optimize scenario/ }));
+    await user.click(screen.getByRole("button", { name: /Calculate production plan/ }));
     await waitFor(() => expect(screen.getByRole("heading", { name: "Recommended production" })).toBeInTheDocument());
     expect(screen.getByLabelText(/Orange juice/)).toHaveValue("35");
   });

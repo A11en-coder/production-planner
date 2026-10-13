@@ -39,10 +39,32 @@ for (const viewport of viewports) {
     await page.reload();
     await expect(page.getByText("No saved scenarios in this browser yet.")).toBeVisible();
 
-    await expect(page.getByRole("heading", { level: 1, name: "Make every litre count." })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Plan today's production" })).toBeVisible();
     await expect(page.getByLabel(/Orange juice/).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Optimize scenario" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Calculate production plan" })).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+    const sectionNav = page.getByRole("navigation", { name: "Planner sections" });
+    for (const section of ["Results", "Scenarios", "Plan"] as const) {
+      const link = sectionNav.getByRole("link", { name: new RegExp(section) });
+      await link.click();
+      await expect.poll(() => page.evaluate(() => window.location.hash)).toBe(`#${section.toLowerCase()}`);
+      await expect(link).toHaveAttribute("aria-current", "location");
+    }
+    if (viewport.width > 560) {
+      await page.getByRole("link", { name: "Review inputs" }).click();
+      await expect.poll(() => page.evaluate(() => window.location.hash)).toBe("#plan");
+    }
+    await page.getByRole("link", { name: "Production Planner" }).click();
+    await expect.poll(() => page.evaluate(() => window.location.hash)).toBe("#top");
+
+    const assumptions = page.locator(".model-assumptions");
+    await assumptions.locator("summary").click();
+    await expect(assumptions).toHaveAttribute("open", "");
+    await page.getByLabel(/Orange juice/).first().fill("42");
+    await page.getByRole("button", { name: "Reset sample" }).click();
+    await expect(page.getByLabel(/Orange juice/).first()).toHaveValue("40");
+    await expect(page.getByText("Fictional sample inputs")).toBeVisible();
 
     // Tab from the start of the page until a numeric field receives keyboard focus.
     let reachedField = false;
@@ -62,14 +84,14 @@ for (const viewport of viewports) {
     const orangeAvailability = page.getByLabel(/Orange juice/).first();
     await orangeAvailability.fill("12.1234");
     await expect(orangeAvailability).toHaveValue("12.1234");
-    await page.getByRole("button", { name: "Optimize scenario" }).click();
+    await page.getByRole("button", { name: "Calculate production plan" }).click();
     await expect(orangeAvailability).toHaveAttribute("aria-invalid", "true");
     const errorIds = (await orangeAvailability.getAttribute("aria-describedby"))?.split(" ") ?? [];
     expect(errorIds.length).toBeGreaterThan(0);
     await expect(page.locator(`#${errorIds.at(-1)}`)).toBeVisible();
 
     await page.reload();
-    await page.getByRole("button", { name: "Optimize scenario" }).click();
+    await page.getByRole("button", { name: "Calculate production plan" }).click();
     await expect(page.getByRole("status").filter({ hasText: "Calculation complete." })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Recommended production" })).toBeVisible();
     await expect(page.getByRole("table", { name: /Recommended production and demand-limit status/ })).toBeVisible();
@@ -85,7 +107,7 @@ for (const viewport of viewports) {
     await expect(page.getByRole("status").filter({ hasText: "Baseline” was saved" })).toBeVisible();
     await orangeAvailability.fill("30");
     await page.getByLabel(/Scenario name/).fill("Reduced orange");
-    await page.getByRole("button", { name: "Optimize scenario" }).click();
+    await page.getByRole("button", { name: "Calculate production plan" }).click();
     await expect(page.getByRole("status").filter({ hasText: "Calculation complete." })).toBeVisible();
     await page.getByRole("button", { name: "Save current scenario" }).click();
     await expect(page.getByRole("status").filter({ hasText: "Reduced orange” was saved" })).toBeVisible();
@@ -104,6 +126,6 @@ test("reflows at a 200%-zoom-equivalent 640px CSS viewport", async ({ page }) =>
   await expect(page.getByText("No saved scenarios in this browser yet.")).toBeVisible();
   await expect.poll(() => page.evaluate(() => window.innerWidth === 640)).toBe(true);
   await expect(page.getByLabel(/Orange juice/).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: /Optimize scenario/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Calculate production plan/ })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });

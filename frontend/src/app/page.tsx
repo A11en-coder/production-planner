@@ -160,6 +160,9 @@ export default function Home() {
   const [pendingCollectionReset, setPendingCollectionReset] = useState(false);
   const [comparisonAId, setComparisonAId] = useState<string | null>(null);
   const [comparisonBId, setComparisonBId] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState("plan");
+  const requestedSection = useRef<string | null>(null);
+  const requestedSectionUntil = useRef(0);
   const revision = useRef(0);
   const activeRequest = useRef<{
     revision: number;
@@ -184,6 +187,103 @@ export default function Home() {
     ? buildResultComparison(comparisonA.scenario, comparisonB.scenario)
     : null;
 
+  const scenarioPanel = (
+    <section id="scenarios" className="section-block scenario-panel" aria-labelledby="saved-scenarios-heading">
+      <div className="section-title-row">
+        <div><p className="section-index">03 / Saved work</p><h2 id="saved-scenarios-heading">Scenarios</h2></div>
+        {storeState.kind === "ready" && <span className="scenario-count">{storeState.scenarios.length}{storeState.unreadableCount ? ` readable + ${storeState.unreadableCount} unreadable` : ""} / 20 saved</span>}
+      </div>
+      <p className="section-intro">Save a named version of this plan in this browser. Nothing syncs to another device or saves automatically.</p>
+      {storeState.kind === "ready" ? <>
+        {!supportsScenarioLocks && <p className="store-help">This browser does not support safe cross-tab storage locks. Saved scenarios can be opened, but changes are disabled here.</p>}
+        <div className="scenario-save-row">
+          <div className="field scenario-name-field"><label htmlFor="scenario-name">Scenario name<span className="unit">1–50 characters</span></label>
+            <input id="scenario-name" type="text" maxLength={50} value={scenarioName} onChange={(event) => setScenarioName(event.target.value)} placeholder="e.g. Reduced orange supply" />
+          </div>
+          <button type="button" className="save-button" onClick={saveCurrentScenario} disabled={!supportsScenarioLocks || hasErrors || storeState.unreadableCount > 0 || storeState.scenarios.length >= 20}>Save current scenario</button>
+        </div>
+        {hasErrors && <p className="store-help">Fix the highlighted fields before saving. Incomplete input drafts are not stored.</p>}
+        {storeState.unreadableCount > 0 && <div className="store-warning" role="status"><span>{storeState.unreadableCount} unreadable records are preserved. Saving is blocked to protect stored data.</span><button type="button" className="recovery-button" onClick={requestCollectionReset}>Reset saved collection</button></div>}
+        {storeState.scenarios.length === 0 ? <div className="empty-scenarios"><p>No saved scenarios in this browser yet.</p><span>Calculate a plan, give it a name, then save it here.</span></div> : <ul className="saved-scenario-list">{storeState.scenarios.map((scenario) => <li key={scenario.id}>
+          <div className="saved-scenario-detail"><strong>{scenario.name}{activeScenarioId === scenario.id ? " · open in planner" : ""}</strong><small>{scenario.result && !scenario.result_outdated ? "Current result saved" : scenario.result_outdated ? "Inputs saved · result needs recalculation" : "Inputs saved · no current result"} · Saved {new Date(scenario.updated_at).toLocaleString()}</small></div>
+          <div className="scenario-actions">
+            <button type="button" className="open-scenario-button" onClick={() => openSavedScenario(scenario.id)}>Open</button>
+            <button type="button" className="manage-scenario-button" onClick={() => setPendingScenarioAction({ kind: "update", id: scenario.id, name: scenario.name })} disabled={!supportsScenarioLocks || hasErrors || storeState.unreadableCount > 0} aria-label={`Update ${scenario.name} from current inputs`}>Update</button>
+            <button type="button" className="manage-scenario-button" onClick={() => setRenameDraft({ id: scenario.id, name: scenario.name, value: scenario.name })} disabled={!supportsScenarioLocks || storeState.unreadableCount > 0}>Rename</button>
+            <button type="button" className="delete-scenario-button" onClick={() => setPendingScenarioAction({ kind: "delete", id: scenario.id, name: scenario.name })} disabled={!supportsScenarioLocks || storeState.unreadableCount > 0}>Delete</button>
+          </div>
+          {pendingOpenScenarioId === scenario.id && <div className="scenario-edit-confirm" role="group" aria-label={`Confirm opening ${scenario.name}`}>
+            <span>Replace the current unsaved planner inputs with “{scenario.name}”?</span>
+            <button type="button" className="manage-scenario-button" onClick={() => openSavedScenario(scenario.id, true)}>Open and replace</button>
+            <button type="button" className="manage-scenario-button" onClick={() => setPendingOpenScenarioId(null)}>Cancel</button>
+          </div>}
+          {renameDraft?.id === scenario.id && <div className="scenario-edit-confirm">
+            <label htmlFor={`rename-${scenario.id}`}>New name for {scenario.name}</label>
+            <input id={`rename-${scenario.id}`} type="text" maxLength={50} value={renameDraft.value} onChange={(event) => setRenameDraft({ ...renameDraft, value: event.target.value })} />
+            <button type="button" className="manage-scenario-button" onClick={() => { setPendingScenarioAction({ kind: "rename", id: scenario.id, name: scenario.name, proposedName: renameDraft.value }); setRenameDraft(null); }}>Review rename</button>
+            <button type="button" className="manage-scenario-button" onClick={() => setRenameDraft(null)}>Cancel</button>
+          </div>}
+          {pendingScenarioAction?.id === scenario.id && <div className="scenario-edit-confirm" role="group" aria-label={`Confirm ${pendingScenarioAction.kind} for ${scenario.name}`}>
+            <span>{pendingScenarioAction.kind === "update" ? `Replace “${scenario.name}” with the current planner inputs?` : pendingScenarioAction.kind === "delete" ? `Permanently delete “${scenario.name}” from this browser?` : `Rename “${scenario.name}” to “${pendingScenarioAction.proposedName.trim()}”?`}</span>
+            <button type="button" className={pendingScenarioAction.kind === "delete" ? "delete-scenario-button" : "manage-scenario-button"} onClick={confirmScenarioAction}>Confirm {pendingScenarioAction.kind}</button>
+            <button type="button" className="manage-scenario-button" onClick={() => setPendingScenarioAction(null)}>Cancel</button>
+          </div>}
+        </li>)}</ul>}
+        {storeState.scenarios.length >= 20 && <p className="store-help">The collection limit is 20 scenarios. Saved items are not removed automatically.</p>}
+        {storeState.scenarios.length > 0 && <section className="scenario-comparison" aria-labelledby="scenario-comparison-heading">
+          <div className="comparison-heading"><h3 id="scenario-comparison-heading">Compare saved scenarios</h3><p>Choose two current optimal results. Differences are calculated as scenario B minus scenario A.</p></div>
+          <div className="comparison-selects">
+            <div className="field"><label htmlFor="compare-scenario-a">Scenario A</label>
+              <select id="compare-scenario-a" value={comparisonA?.scenario.id ?? ""} onChange={(event) => {
+                const nextId = event.target.value;
+                setComparisonAId(nextId || null);
+                if (comparisonB?.scenario.id === nextId) setComparisonBId(eligibleComparisonOptions.find((option) => option.scenario.id !== nextId)?.scenario.id ?? null);
+              }}>
+                <option value="">Select scenario A</option>
+                {comparisonOptions.map(({ scenario, eligibility }) => <option key={scenario.id} value={scenario.id} disabled={!eligibility.eligible || scenario.id === comparisonB?.scenario.id}>
+                  {scenario.name}: {eligibility.eligible ? "Ready to compare" : eligibility.reason}
+                </option>)}
+              </select>
+            </div>
+            <div className="field"><label htmlFor="compare-scenario-b">Scenario B</label>
+              <select id="compare-scenario-b" value={comparisonB?.scenario.id ?? ""} onChange={(event) => {
+                const nextId = event.target.value;
+                setComparisonBId(nextId || null);
+                if (comparisonA?.scenario.id === nextId) setComparisonAId(eligibleComparisonOptions.find((option) => option.scenario.id !== nextId)?.scenario.id ?? null);
+              }}>
+                <option value="">Select scenario B</option>
+                {comparisonOptions.map(({ scenario, eligibility }) => <option key={scenario.id} value={scenario.id} disabled={!eligibility.eligible || scenario.id === comparisonA?.scenario.id}>
+                  {scenario.name}: {eligibility.eligible ? "Ready to compare" : eligibility.reason}
+                </option>)}
+              </select>
+            </div>
+          </div>
+          {eligibleComparisonOptions.length < 2
+            ? <p className="comparison-unavailable" role="status">Save two distinct scenarios with current optimal results to compare them. Drafts, infeasible results, outdated snapshots, and prior model versions need attention first.</p>
+            : comparisonA && comparisonB && inputComparison && resultComparison && <>
+              <div className="comparison-tables">
+                <ComparisonTable caption="Saved planner inputs" aName={comparisonA.scenario.name} bName={comparisonB.scenario.name} rows={inputComparison} />
+                <ComparisonTable caption="Optimal production and resource use" aName={comparisonA.scenario.name} bName={comparisonB.scenario.name} rows={resultComparison} />
+              </div>
+              <div className="comparison-charts">
+                <ComparisonChart title="Recommended production" rows={resultComparison.filter((row) => row.key.startsWith("production-"))} />
+                <ComparisonChart title="Resource use" rows={resultComparison.filter((row) => row.key.startsWith("used-"))} />
+                <ComparisonChart title="Total contribution" rows={resultComparison.filter((row) => row.key === "total-contribution")} />
+              </div>
+            </>}
+        </section>}
+      </> : <div className="store-warning" role="status"><span>{storeState.message}</span>
+        {storeState.kind === "unavailable" ? <button type="button" className="recovery-button" onClick={refreshStoredScenarios}>Retry storage</button> : <button type="button" className="recovery-button" onClick={requestCollectionReset}>Reset saved collection</button>}
+      </div>}
+      {pendingCollectionReset && <div className="scenario-edit-confirm" role="group" aria-label="Confirm saved collection reset">
+        <span>Reset the saved collection? This removes every saved scenario in this browser. Current planner inputs will remain.</span>
+        <button type="button" className="delete-scenario-button" onClick={() => void recoverSavedCollection()}>Confirm reset</button>
+        <button type="button" className="manage-scenario-button" onClick={() => setPendingCollectionReset(false)}>Cancel</button>
+      </div>}
+      {storeMessage && <p className={`store-message store-message-${storeMessageKind}`} role={storeMessageKind === "error" ? "alert" : "status"}>{storeMessage}{retrySaveAvailable && <button type="button" className="recovery-button" onClick={saveCurrentScenario}>Retry save</button>}</p>}
+    </section>
+  );
+
   useEffect(() => {
     refreshStoredScenarios();
     function handleStorage(event: StorageEvent) {
@@ -194,6 +294,31 @@ export default function Home() {
     }
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
+  useEffect(() => {
+    const sections = ["plan", "results", "scenarios"]
+      .map((id) => document.getElementById(id))
+      .filter((section): section is HTMLElement => section !== null);
+    function updateActiveSection() {
+      if (requestedSection.current && Date.now() < requestedSectionUntil.current) {
+        setActiveSection(requestedSection.current);
+        return;
+      }
+      if (requestedSection.current) {
+        requestedSection.current = null;
+      }
+      const activeLine = Math.min(window.innerHeight * 0.65, 640);
+      const passed = sections.filter((section) => section.getBoundingClientRect().top <= activeLine);
+      setActiveSection(passed.at(-1)?.id ?? sections[0]?.id ?? "plan");
+    }
+    window.addEventListener("scroll", updateActiveSection, { passive: true });
+    window.addEventListener("resize", updateActiveSection);
+    updateActiveSection();
+    return () => {
+      window.removeEventListener("scroll", updateActiveSection);
+      window.removeEventListener("resize", updateActiveSection);
+    };
   }, []);
 
   function refreshStoredScenarios() {
@@ -448,6 +573,13 @@ export default function Home() {
       setResultRevision(request.revision);
       setHasUnsavedWork(true);
       setCalculationState({ kind: "success", message: "Calculation complete." });
+      window.requestAnimationFrame(() => {
+        const resultsSection = document.getElementById("results");
+        const reduceMotion = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const behavior = reduceMotion ? "auto" : "smooth";
+        resultsSection?.scrollIntoView?.({ behavior, block: "start" });
+        document.getElementById("results-heading")?.focus({ preventScroll: true });
+      });
     } catch (cause) {
       if (activeRequest.current !== request || revision.current !== request.revision) return;
       const message = request.timedOut
@@ -487,134 +619,32 @@ export default function Home() {
 
   return <main className="shell">
     <header className="topbar">
-      <a className="brand" href="#top">
-        <span className="brand-mark" aria-hidden="true">P</span>
-        <span>Production Planner</span>
-      </a>
-      <span className="topbar-note"><span className="status-dot" />Daily blend planning</span>
+      <a className="brand" href="#top">Production Planner</a>
+      <span className="topbar-note">Daily planning <span aria-hidden="true">/</span> one production day</span>
     </header>
 
-    <section className="hero" id="top" aria-labelledby="page-title">
-      <div className="hero-copy">
-        <p className="eyebrow">A clearer way to plan production</p>
-        <h1 id="page-title">Make every litre<br /><span>count.</span></h1>
-        <p className="hero-description">Balance your blend recipes, ingredient supply and production time to find a plan that works for today.</p>
+    <section className="page-intro" id="top" aria-labelledby="page-title">
+      <div>
+        <p className="section-index">Today&apos;s production</p>
+        <h1 id="page-title">Plan today&apos;s production</h1>
+        <p>Set ingredient supply and blend limits, then calculate a feasible plan.</p>
       </div>
-      <div className="hero-art" aria-hidden="true">
-        <div className="orbit orbit-one" /><div className="orbit orbit-two" />
-        <div className="fruit fruit-orange" /><div className="fruit fruit-lime" /><div className="fruit fruit-berry" />
-        <span className="art-leaf leaf-one" /><span className="art-leaf leaf-two" />
-        <div className="art-label"><span>3</span><small>blends<br />in focus</small></div>
-      </div>
+      <a className="intro-link" href="#plan">Review inputs <span aria-hidden="true">↓</span></a>
     </section>
 
-    <div className="notice-strip" role="note">
-      <span className="notice-icon" aria-hidden="true">i</span>
-      <p><strong>Sample scenario</strong> — Values are fictional and loaded for you to explore. Nothing is saved automatically.</p>
-      <span className="sample-tag">DEMO DATA</span>
-    </div>
+    <nav className="section-nav" aria-label="Planner sections">
+      <a href="#plan" onClick={() => { requestedSection.current = "plan"; requestedSectionUntil.current = Date.now() + 1200; setActiveSection("plan"); }} aria-current={activeSection === "plan" ? "location" : undefined}><span>01</span>Plan</a>
+      <a href="#results" onClick={() => { requestedSection.current = "results"; requestedSectionUntil.current = Date.now() + 1200; setActiveSection("results"); }} aria-current={activeSection === "results" ? "location" : undefined}><span>02</span>Results</a>
+      <a href="#scenarios" onClick={() => { requestedSection.current = "scenarios"; requestedSectionUntil.current = Date.now() + 1200; setActiveSection("scenarios"); }} aria-current={activeSection === "scenarios" ? "location" : undefined}><span>03</span>Scenarios</a>
+    </nav>
 
-    <section className="scenario-panel" aria-labelledby="saved-scenarios-heading">
-      <div className="scenario-panel-heading">
-        <div><p className="eyebrow">This browser only</p><h2 id="saved-scenarios-heading">Saved scenarios</h2></div>
-        {storeState.kind === "ready" && <span className="scenario-count">{storeState.scenarios.length}{storeState.unreadableCount ? ` readable + ${storeState.unreadableCount} unreadable` : ""} / 20 entries</span>}
-      </div>
-      <p className="scenario-storage-copy">Save explicitly to this browser and website address. Nothing syncs to another device or saves automatically.</p>
-      {storeState.kind === "ready" ? <>
-        {!supportsScenarioLocks && <p className="store-help">This browser does not support safe cross-tab storage locks. Saved scenarios can be opened, but changes are disabled here.</p>}
-        <div className="scenario-save-row">
-          <div className="field scenario-name-field"><label htmlFor="scenario-name">Scenario name<span className="unit">1–50 characters</span></label>
-            <input id="scenario-name" type="text" maxLength={50} value={scenarioName} onChange={(event) => setScenarioName(event.target.value)} placeholder="e.g. Reduced orange supply" />
-          </div>
-          <button type="button" className="save-button" onClick={saveCurrentScenario} disabled={!supportsScenarioLocks || hasErrors || storeState.unreadableCount > 0 || storeState.scenarios.length >= 20}>Save current scenario</button>
-        </div>
-        {hasErrors && <p className="store-help">Fix the highlighted fields before saving. Incomplete input drafts are not stored.</p>}
-        {storeState.unreadableCount > 0 && <div className="store-warning" role="status"><span>{storeState.unreadableCount} unreadable record(s) are preserved. Saving is blocked to protect stored data.</span><button type="button" className="recovery-button" onClick={requestCollectionReset}>Reset saved collection…</button></div>}
-        {storeState.scenarios.length === 0 ? <p className="empty-scenarios">No saved scenarios in this browser yet.</p> : <ul className="saved-scenario-list">{storeState.scenarios.map((scenario) => <li key={scenario.id}>
-          <div className="saved-scenario-detail"><strong>{scenario.name}{activeScenarioId === scenario.id ? " · open in planner" : ""}</strong><small>{scenario.result && !scenario.result_outdated ? "Current result saved" : scenario.result_outdated ? "Inputs saved · result needs recalculation" : "Inputs saved · no current result"} · Saved {new Date(scenario.updated_at).toLocaleString()}</small></div>
-          <div className="scenario-actions">
-            <button type="button" className="open-scenario-button" onClick={() => openSavedScenario(scenario.id)}>Open</button>
-            <button type="button" className="manage-scenario-button" onClick={() => setPendingScenarioAction({ kind: "update", id: scenario.id, name: scenario.name })} disabled={!supportsScenarioLocks || hasErrors || storeState.unreadableCount > 0} aria-label={`Update ${scenario.name} from current inputs`}>Update</button>
-            <button type="button" className="manage-scenario-button" onClick={() => setRenameDraft({ id: scenario.id, name: scenario.name, value: scenario.name })} disabled={!supportsScenarioLocks || storeState.unreadableCount > 0}>Rename</button>
-            <button type="button" className="delete-scenario-button" onClick={() => setPendingScenarioAction({ kind: "delete", id: scenario.id, name: scenario.name })} disabled={!supportsScenarioLocks || storeState.unreadableCount > 0}>Delete</button>
-          </div>
-          {pendingOpenScenarioId === scenario.id && <div className="scenario-edit-confirm" role="group" aria-label={`Confirm opening ${scenario.name}`}>
-            <span>Replace the current unsaved planner inputs with “{scenario.name}”?</span>
-            <button type="button" className="manage-scenario-button" onClick={() => openSavedScenario(scenario.id, true)}>Open and replace</button>
-            <button type="button" className="manage-scenario-button" onClick={() => setPendingOpenScenarioId(null)}>Cancel</button>
-          </div>}
-          {renameDraft?.id === scenario.id && <div className="scenario-edit-confirm">
-            <label htmlFor={`rename-${scenario.id}`}>New name for {scenario.name}</label>
-            <input id={`rename-${scenario.id}`} type="text" maxLength={50} value={renameDraft.value} onChange={(event) => setRenameDraft({ ...renameDraft, value: event.target.value })} />
-            <button type="button" className="manage-scenario-button" onClick={() => { setPendingScenarioAction({ kind: "rename", id: scenario.id, name: scenario.name, proposedName: renameDraft.value }); setRenameDraft(null); }}>Review rename</button>
-            <button type="button" className="manage-scenario-button" onClick={() => setRenameDraft(null)}>Cancel</button>
-          </div>}
-          {pendingScenarioAction?.id === scenario.id && <div className="scenario-edit-confirm" role="group" aria-label={`Confirm ${pendingScenarioAction.kind} for ${scenario.name}`}>
-            <span>{pendingScenarioAction.kind === "update" ? `Replace “${scenario.name}” with the current planner inputs?` : pendingScenarioAction.kind === "delete" ? `Permanently delete “${scenario.name}” from this browser?` : `Rename “${scenario.name}” to “${pendingScenarioAction.proposedName.trim()}”?`}</span>
-            <button type="button" className={pendingScenarioAction.kind === "delete" ? "delete-scenario-button" : "manage-scenario-button"} onClick={confirmScenarioAction}>Confirm {pendingScenarioAction.kind}</button>
-            <button type="button" className="manage-scenario-button" onClick={() => setPendingScenarioAction(null)}>Cancel</button>
-          </div>}
-        </li>)}</ul>}
-        {storeState.scenarios.length >= 20 && <p className="store-help">The collection limit is 20 scenarios. Saved items are not removed automatically.</p>}
-        {storeState.scenarios.length > 0 && <section className="scenario-comparison" aria-labelledby="scenario-comparison-heading">
-          <div className="comparison-heading"><h3 id="scenario-comparison-heading">Compare saved scenarios</h3><p>Choose two current optimal results. Differences are calculated as scenario B minus scenario A.</p></div>
-          <div className="comparison-selects">
-            <div className="field"><label htmlFor="compare-scenario-a">Scenario A</label>
-              <select id="compare-scenario-a" value={comparisonA?.scenario.id ?? ""} onChange={(event) => {
-                const nextId = event.target.value;
-                setComparisonAId(nextId || null);
-                if (comparisonB?.scenario.id === nextId) setComparisonBId(eligibleComparisonOptions.find((option) => option.scenario.id !== nextId)?.scenario.id ?? null);
-              }}>
-                <option value="">Select scenario A</option>
-                {comparisonOptions.map(({ scenario, eligibility }) => <option key={scenario.id} value={scenario.id} disabled={!eligibility.eligible || scenario.id === comparisonB?.scenario.id}>
-                  {scenario.name} — {eligibility.eligible ? "Ready to compare" : eligibility.reason}
-                </option>)}
-              </select>
-            </div>
-            <div className="field"><label htmlFor="compare-scenario-b">Scenario B</label>
-              <select id="compare-scenario-b" value={comparisonB?.scenario.id ?? ""} onChange={(event) => {
-                const nextId = event.target.value;
-                setComparisonBId(nextId || null);
-                if (comparisonA?.scenario.id === nextId) setComparisonAId(eligibleComparisonOptions.find((option) => option.scenario.id !== nextId)?.scenario.id ?? null);
-              }}>
-                <option value="">Select scenario B</option>
-                {comparisonOptions.map(({ scenario, eligibility }) => <option key={scenario.id} value={scenario.id} disabled={!eligibility.eligible || scenario.id === comparisonA?.scenario.id}>
-                  {scenario.name} — {eligibility.eligible ? "Ready to compare" : eligibility.reason}
-                </option>)}
-              </select>
-            </div>
-          </div>
-          {eligibleComparisonOptions.length < 2
-            ? <p className="comparison-unavailable" role="status">Save two distinct scenarios with current optimal results to compare them. Drafts, infeasible results, outdated snapshots, and prior model versions need attention first.</p>
-            : comparisonA && comparisonB && inputComparison && resultComparison && <>
-              <div className="comparison-tables">
-                <ComparisonTable caption="Saved planner inputs" aName={comparisonA.scenario.name} bName={comparisonB.scenario.name} rows={inputComparison} />
-                <ComparisonTable caption="Optimal production and resource use" aName={comparisonA.scenario.name} bName={comparisonB.scenario.name} rows={resultComparison} />
-              </div>
-              <div className="comparison-charts">
-                <ComparisonChart title="Recommended production" rows={resultComparison.filter((row) => row.key.startsWith("production-"))} />
-                <ComparisonChart title="Resource use" rows={resultComparison.filter((row) => row.key.startsWith("used-"))} />
-                <ComparisonChart title="Total contribution" rows={resultComparison.filter((row) => row.key === "total-contribution")} />
-              </div>
-            </>}
-        </section>}
-      </> : <div className="store-warning" role="status"><span>{storeState.message}</span>
-        {storeState.kind === "unavailable" ? <button type="button" className="recovery-button" onClick={refreshStoredScenarios}>Retry storage</button> : <button type="button" className="recovery-button" onClick={requestCollectionReset}>Reset saved collection…</button>}
-      </div>}
-      {pendingCollectionReset && <div className="scenario-edit-confirm" role="group" aria-label="Confirm saved collection reset">
-        <span>Reset the saved collection? This removes every saved scenario in this browser. Current planner inputs will remain.</span>
-        <button type="button" className="delete-scenario-button" onClick={() => void recoverSavedCollection()}>Confirm reset</button>
-        <button type="button" className="manage-scenario-button" onClick={() => setPendingCollectionReset(false)}>Cancel</button>
-      </div>}
-      {storeMessage && <p className={`store-message store-message-${storeMessageKind}`} role={storeMessageKind === "error" ? "alert" : "status"}>{storeMessage}{retrySaveAvailable && <button type="button" className="recovery-button" onClick={saveCurrentScenario}>Retry save</button>}</p>}
-    </section>
-
-    <div className="workspace-grid">
-      <form className="planner-form" onSubmit={handleSubmit} noValidate>
-        <div className="section-heading">
-          <div><p className="eyebrow">Your production day</p><h2>Scenario inputs</h2></div>
+    <form id="planner-form" className="planner-form" onSubmit={handleSubmit} noValidate>
+      <section id="plan" className="plan-section" aria-labelledby="plan-heading">
+        <div className="plan-heading">
+          <div><p className="section-index">01 / Inputs</p><h2 id="plan-heading">Set your production limits</h2></div>
           <button type="button" className="text-button" onClick={resetSample}>Reset sample</button>
         </div>
+        <div className="sample-note" role="note"><strong>{samePlanningInputs(inputs, SAMPLE_INPUTS) && activeScenarioId === null ? "Fictional sample inputs" : "Current planning inputs"}</strong><span>Changes are not saved automatically.</span></div>
 
         <section className="panel resource-panel" aria-labelledby="resources-heading">
           <div className="panel-heading">
@@ -653,9 +683,8 @@ export default function Home() {
               const blend = blendInput(blendId);
               return <article className={`panel blend-card blend-${blendId}`} key={blendId} aria-labelledby={`blend-title-${blendId}`}>
                 <div className="blend-card-top">
-                  <span className={`blend-icon blend-icon-${index + 1}`} aria-hidden="true">{["◒", "◍", "✳"][index]}</span>
-                  <div><p className="blend-kicker">BLEND 0{index + 1}</p><h4 id={`blend-title-${blendId}`}>{BLEND_LABELS[blendId]}</h4></div>
-                  <span className="recipe-badge">Recipe shares</span>
+                  <span className="blend-index" aria-label={`Blend ${index + 1}`}>0{index + 1}</span>
+                  <div><p className="blend-kicker">Blend</p><h4 id={`blend-title-${blendId}`}>{BLEND_LABELS[blendId]}</h4></div>
                 </div>
                 <div className="recipe-grid">
                   {INGREDIENT_IDS.map((ingredient) => <Field
@@ -689,20 +718,36 @@ export default function Home() {
           </div>
         </section>
 
+        <details className="model-assumptions">
+          <summary>What the plan considers</summary>
+          <ul>
+            <li>Ingredient supply and processing time are shared across blends.</li>
+            <li>Recipes stay fixed during a calculation and can change before the next one.</li>
+            <li>One litre of ingredients yields one litre of juice, with no production loss.</li>
+            <li>Production can include fractional litres.</li>
+          </ul>
+        </details>
         <div className="form-actions">
-          <div className="action-copy"><span className="action-spark" aria-hidden="true">✦</span><span>Ready when your inputs are set.</span></div>
-          <button className="primary-button" type="submit" disabled={isPending}>
-            {isPending ? "Optimizing…" : "Optimize scenario"} <span aria-hidden="true">{isPending ? "◌" : "↗"}</span>
+          <p>Uses the limits and recipe shares entered above.</p>
+          <button id="calculate-plan" className="primary-button" type="submit" disabled={isPending}>
+            {isPending ? <><span className="loading-spinner" aria-hidden="true" />Calculating plan</> : "Calculate production plan"}
           </button>
         </div>
         {calculationState.message && <div className={`form-notice ${calculationState.kind === "error" ? "form-notice-error" : ""}`} role={calculationState.kind === "error" ? "alert" : "status"} aria-live="polite">
           <span>{calculationState.message}{calculationState.requestId && <small className="error-request-id">Request {calculationState.requestId}</small>}</span>
           {calculationState.kind === "error" && !hasErrors && <button type="button" className="retry-button" onClick={() => void runCalculation()}>Retry</button>}
         </div>}
-        {result && <section className="result-panel" aria-labelledby="result-heading" aria-live="polite">
+      </section>
+    </form>
+
+    <section id="results" className="results-section" aria-labelledby="results-section-heading">
+      <div className="section-title-row results-heading-row">
+        <div><p className="section-index">02 / Recommendation</p><h2 id="results-section-heading">Results</h2></div>
+        {result && resultIsOutdated && <span className="outdated-badge">Inputs changed. Recalculate</span>}
+      </div>
+      {result ? <div className="result-panel" aria-labelledby="results-heading" aria-live="polite">
           <div className="result-title-row">
-            <div><p className="eyebrow">Calculation response</p><h3 id="result-heading">{result.status === "optimal" ? "Recommended production" : "Minimum orders exceed resources"}</h3></div>
-            {resultIsOutdated && <span className="outdated-badge">OUTDATED INPUTS</span>}
+            <div><h3 id="results-heading" tabIndex={-1}>{result.status === "optimal" ? "Recommended production" : "Minimum orders exceed resources"}</h3></div>
           </div>
           {result.status === "optimal" ? <>
             <div className="result-summary"><span>Total profit contribution</span><strong>{formatContribution(result.profit_contribution_aud)}</strong></div>
@@ -713,7 +758,7 @@ export default function Home() {
                   <th scope="row">{BLEND_LABELS[blendId]}</th>
                   <td><span>{formatQuantity(result.production_litres[blendId], "L")}</span>{result.production_litres[blendId] > 0 && result.production_litres[blendId] < 0.001 && <small className="precision-detail">Exact: {formatPrecision(result.production_litres[blendId])} L</small>}</td>
                   <td>{result.reached_demand_caps.includes(blendId) ? <span className="result-flag">At demand cap</span> : "Below demand cap"}</td>
-                  <td className={resultBlendContributions?.[blendId] !== undefined && resultBlendContributions[blendId] < 0 ? "negative-value" : ""}>{resultBlendContributions ? formatContribution(resultBlendContributions[blendId]) : "—"}</td>
+                  <td className={resultBlendContributions?.[blendId] !== undefined && resultBlendContributions[blendId] < 0 ? "negative-value" : ""}>{resultBlendContributions ? formatContribution(resultBlendContributions[blendId]) : "Not calculated"}</td>
                 </tr>)}
               </tbody></table></div>
               <div className="chart-card" role="img" aria-label={`Production by blend: ${BLEND_IDS.map((id) => `${BLEND_LABELS[id]} ${formatQuantity(result.production_litres[id], "L")}`).join("; ")}`}>
@@ -778,32 +823,17 @@ export default function Home() {
             })}</tbody></table></div>
           </>}
           <p className="request-reference">Request {result.request_id} <span>·</span> {result.duration_ms.toFixed(0)} ms</p>
-        </section>}
-      </form>
+        </div> : <div className="empty-result">
+        <p className="empty-result-label">No calculation yet</p>
+        <h3 id="results-heading" tabIndex={-1}>Your plan will appear here</h3>
+        <p>Enter today&apos;s limits and calculate to see recommended litres, contribution, and resource use.</p>
+        <a className="text-button" href="#plan">Review plan inputs</a>
+      </div>}
+      <p className="contribution-note">Contribution is not net profit. It excludes costs beyond the values entered here.</p>
+    </section>
 
-      <aside className="sidebar" aria-label="Model guide">
-        <section className="guide-card">
-          <div className="guide-icon" aria-hidden="true">✦</div>
-          <p className="eyebrow">The planning model</p>
-          <h2>Good plans<br />start with balance.</h2>
-          <p>Production is planned for one day across three juice blends. Recipes stay fixed during a calculation and can be changed before the next one.</p>
-          <div className="guide-divider" />
-          <h3>What the plan considers</h3>
-          <ul className="assumption-list">
-            <li><span className="check-mark">✓</span><span>Ingredient supply is shared across blends.</span></li>
-            <li><span className="check-mark">✓</span><span>Processing capacity is shared across the day.</span></li>
-            <li><span className="check-mark">✓</span><span>Every litre of ingredients yields one litre of juice.</span></li>
-            <li><span className="check-mark">✓</span><span>Production is continuous; fractional litres are possible.</span></li>
-          </ul>
-        </section>
-        <section className="contribution-card">
-          <span className="contribution-icon" aria-hidden="true">↗</span>
-          <div><strong>Contribution ≠ net profit</strong><p>Contribution excludes costs outside the values entered here.</p></div>
-        </section>
-        <p className="sidebar-caption">Use this planner as a decision aid. Review the assumptions before acting on a recommendation.</p>
-      </aside>
-    </div>
+    {scenarioPanel}
 
-    <footer className="footer"><span>PRODUCTION PLANNER</span><span>One day · Three blends · Fictional sample data</span></footer>
+    <footer className="footer"><span>Production Planner</span><span>One day, three blends, browser-saved scenarios</span></footer>
   </main>;
 }
