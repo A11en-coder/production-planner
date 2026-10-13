@@ -115,6 +115,8 @@ for (const viewport of viewports) {
     await expect(page.getByRole("table", { name: "Optimal production and resource use" })).toBeVisible();
     await expect(page.getByRole("img", { name: /^Recommended production\..*scenario A/i })).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
     await expectNoA11yViolations(page);
   });
 }
